@@ -59,7 +59,63 @@ export const aacSymbols: AacSymbol[] = [
     text: 'no',
     imagePath: '/aac-images/no.svg',
     category: 'responses'
-  }
+  },
+  
+  {
+    id: 'cheese',
+    text: 'Cheese',
+    imagePath: '/aac-images/cheese.jpeg',
+    category: 'food'
+  },
+  
+  {
+    id: 'chocolate',
+    text: 'Chocolate',
+    imagePath: '/aac-images/chocolate.png',
+    category: 'food'
+  },
+  
+  {
+    id: 'drink',
+    text: 'Drink',
+    imagePath: '/aac-images/drink.png',
+    category: 'food'
+  },
+  
+  {
+    id: 'i want',
+    text: 'I want',
+    imagePath: '/aac-images/i-want.jpg',
+    category: 'actions'
+  },
+  
+  {
+    id: 'icecream',
+    text: 'Icecream',
+    imagePath: '/aac-images/icecream.jpeg',
+    category: 'food'
+  },
+  
+  {
+    id: 'meds',
+    text: 'meds',
+    imagePath: '/aac-images/meds.jpg',
+    category: 'actions'
+  },
+  
+  {
+    id: 'sleep',
+    text: 'Sleep',
+    imagePath: '/aac-images/sleep.png',
+    category: 'actions'
+  },
+  
+  {
+    id: 'yoghurt',
+    text: 'Yoghurt',
+    imagePath: '/aac-images/yoghurt.jpeg',
+    category: 'actions'
+  },
 ];
 
 export const categories = ['all', 'greetings', 'needs', 'actions', 'descriptors', 'responses'];
