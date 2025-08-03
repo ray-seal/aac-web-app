@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------------------- */
+/* Base Styles            */
+/* ---------------------- */
+
+:root {
+  --color-bg: #ffffff;
+  --color-fg: #171717;
+  --font-sans: Arial, Helvetica, sans-serif;
+}
+
+body {
+  @apply text-base;
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+}
