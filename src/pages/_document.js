@@ -1,12 +1,14 @@
-// pages/_document.js
 import { Html, Head, Main, NextScript } from 'next/document';
 
 export default function Document() {
   return (
-    <Html>
+    <Html lang="en">
       <Head>
         <link rel="manifest" href="/manifest.json" />
-        {/* Add other meta tags or icons here if needed */}
+        <link rel="icon" href="/speakly.png" type="image/png" />
+        <meta name="theme-color" content="#ffffff" />
+        <link rel="apple-touch-icon" href="/speakly.png" />
+        <!-- Optionally, add more icon sizes for broader support -->
       </Head>
       <body>
         <Main />
