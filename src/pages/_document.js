@@ -8,7 +8,7 @@ export default function Document() {
         <link rel="icon" href="/speakly.png" type="image/png" />
         <meta name="theme-color" content="#ffffff" />
         <link rel="apple-touch-icon" href="/speakly.png" />
-        <!-- Optionally, add more icon sizes for broader support -->
+        {/* Optionally, add more icon sizes for broader support */}
       </Head>
       <body>
         <Main />
