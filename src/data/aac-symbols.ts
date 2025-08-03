@@ -12,22 +12,11 @@ export const aacSymbols: AacSymbol[] = [
     imagePath: '/aac-images/hello.svg',
     category: 'greetings'
   },
-  {
-    id: 'water',
-    text: 'water',
-    imagePath: '/aac-images/water.svg',
-    category: 'needs'
-  },
+  
   {
     id: 'eat',
     text: 'eat',
     imagePath: '/aac-images/eat.svg',
-    category: 'actions'
-  },
-  {
-    id: 'play',
-    text: 'play',
-    imagePath: '/aac-images/play.svg',
     category: 'actions'
   },
   {
