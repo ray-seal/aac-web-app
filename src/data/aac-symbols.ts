@@ -164,6 +164,18 @@ export const aacSymbols: AacSymbol[] = [
     imagePath: '/aac-images/hello.svg',
     category: 'greetings'
   },
+  {
+    id: 'goodbye',
+    text: 'Goodbye',
+    imagePath: '/aac-images/goodbye.jpg',
+    category: 'greetings'
+  },
+  {
+    id: 'please',
+    text: 'Please',
+    imagePath: '/aac-images/please.jpg',
+    category: 'greetings'
+  },
   
   {
     id: 'eat',
