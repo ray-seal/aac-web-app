@@ -102,7 +102,7 @@ export const aacSymbols: AacSymbol[] = [
     id: 'swing',
     text: 'Swing',
     imagePath: '/aac-images/swing.jpg',
-    category: 'actions'
+    category: 'things'
   },
   
   {
