@@ -12,51 +12,7 @@ export const aacSymbols: AacSymbol[] = [
     imagePath: '/aac-images/i-want.jpg',
     category: 'actions'
   },
-  {
-    id: 'hello',
-    text: 'Hello',
-    imagePath: '/aac-images/hello.svg',
-    category: 'greetings'
-  },
-  
-  {
-    id: 'eat',
-    text: 'To eat',
-    imagePath: '/aac-images/eat.svg',
-    category: 'actions'
-  },
-  {
-    id: 'more',
-    text: 'More',
-    imagePath: '/aac-images/more.svg',
-    category: 'descriptors'
-  },
-  {
-    id: 'help',
-    text: 'Help',
-    imagePath: '/aac-images/help.svg',
-    category: 'needs'
-  },
-  {
-    id: 'stop',
-    text: 'Stop',
-    imagePath: '/aac-images/stop.svg',
-    category: 'actions'
-  },
-  {
-    id: 'yes',
-    text: 'Yes',
-    imagePath: '/aac-images/yes.svg',
-    category: 'responses'
-  },
-  {
-    id: 'no',
-    text: 'No',
-    imagePath: '/aac-images/no.svg',
-    category: 'responses'
-  },
-  
-  {
+   {
     id: 'cheese',
     text: 'Cheese',
     imagePath: '/aac-images/cheese.jpeg',
@@ -85,6 +41,51 @@ export const aacSymbols: AacSymbol[] = [
   },
   
   {
+    id: 'yoghurt',
+    text: 'Yoghurt',
+    imagePath: '/aac-images/yoghurt.jpeg',
+    category: 'food'
+  },
+  
+  {
+    id: 'crisps',
+    text: 'Crisps',
+    imagePath: '/aac-images/crisps.jpg',
+    category: 'food'
+  },
+  
+ {
+    id: 'egg',
+    text: 'Egg',
+    imagePath: '/aac-images/egg.jpg',
+    category: 'food'
+  },
+ {
+    id: 'apple',
+    text: 'Apple',
+    imagePath: '/aac-images/apple.jpg',
+    category: 'food'
+  },
+  {
+    id: 'chicken',
+    text: 'Chicken',
+    imagePath: '/aac-images/chicken.jpg',
+    category: 'food'
+  },
+ {
+    id: 'macncheese',
+    text: 'Mac N Cheese',
+    imagePath: '/aac-images/macncheese.jpg',
+    category: 'food'
+  },
+  
+ {
+    id: 'pasta',
+    text: 'Pasta',
+    imagePath: '/aac-images/pasta.jpg',
+    category: 'food'
+  },
+  {
     id: 'meds',
     text: 'Take meds',
     imagePath: '/aac-images/meds.jpg',
@@ -98,12 +99,6 @@ export const aacSymbols: AacSymbol[] = [
     category: 'actions'
   },
   
-  {
-    id: 'yoghurt',
-    text: 'Yoghurt',
-    imagePath: '/aac-images/yoghurt.jpeg',
-    category: 'food'
-  },
    {
     id: 'toilet',
     text: 'Toilet',
@@ -128,6 +123,74 @@ export const aacSymbols: AacSymbol[] = [
     imagePath: '/aac-images/tablet.jpg',
     category: 'things'
   },
+  {
+    id: 'shoes-on',
+    text: 'Put shoes on',
+    imagePath: '/aac-images/shoes-on.jpg',
+    category: 'actions'
+  },
+ 
+ {
+    id: 'bath',
+    text: 'Bath',
+    imagePath: '/aac-images/bath.jpg',
+    category: 'actions'
+  },
+  
+ {
+    id: 'brush hair',
+    text: 'Brush hair',
+    imagePath: '/aac-images/brush-hair.jpg',
+    category: 'actions'
+  },
+ {
+    id: 'brush teeth',
+    text: 'Brush teeth',
+    imagePath: '/aac-images/brush-teeth.jpg',
+    category: 'actions'
+  },
+
+  {
+    id: 'hello',
+    text: 'Hello',
+    imagePath: '/aac-images/hello.svg',
+    category: 'greetings'
+  },
+  
+  {
+    id: 'eat',
+    text: 'To eat',
+    imagePath: '/aac-images/eat.svg',
+    category: 'actions'
+  },
+  
+  {
+    id: 'help',
+    text: 'Help',
+    imagePath: '/aac-images/help.svg',
+    category: 'needs'
+  },
+  
+  {
+    id: 'stop',
+    text: 'Stop',
+    imagePath: '/aac-images/stop.svg',
+    category: 'actions'
+  },
+  {
+    id: 'yes',
+    text: 'Yes',
+    imagePath: '/aac-images/yes.svg',
+    category: 'responses'
+  },
+  {
+    id: 'no',
+    text: 'No',
+    imagePath: '/aac-images/no.svg',
+    category: 'responses'
+  },
+  
+  
  {
     id: 'school',
     text: 'Go to school',
@@ -146,67 +209,8 @@ export const aacSymbols: AacSymbol[] = [
     imagePath: '/aac-images/car.jpg',
     category: 'activities'
   },
- {
-    id: 'crisps',
-    text: 'Crisps',
-    imagePath: '/aac-images/crisps.jpg',
-    category: 'food'
-  },
- {
-    id: 'egg',
-    text: 'Egg',
-    imagePath: '/aac-images/egg.jpg',
-    category: 'food'
-  },
- {
-    id: 'apple',
-    text: 'Apple',
-    imagePath: '/aac-images/apple.jpg',
-    category: 'food'
-  },
- {
-    id: 'shoes-on',
-    text: 'Put shoes on',
-    imagePath: '/aac-images/shoes-on.jpg',
-    category: 'actions'
-  },
- {
-    id: 'chicken',
-    text: 'Chicken',
-    imagePath: '/aac-images/chicken.jpg',
-    category: 'food'
-  },
- {
-    id: 'macncheese',
-    text: 'Mac N Cheese',
-    imagePath: '/aac-images/macncheese.jpg',
-    category: 'food'
-  },
- {
-    id: 'bath',
-    text: 'Bath',
-    imagePath: '/aac-images/bath.jpg',
-    category: 'actions'
-  },
- {
-    id: 'pasta',
-    text: 'Pasta',
-    imagePath: '/aac-images/pasta.jpg',
-    category: 'food'
-  },
- {
-    id: 'brush hair',
-    text: 'Brush hair',
-    imagePath: '/aac-images/brush-hair.jpg',
-    category: 'actions'
-  },
- {
-    id: 'brush teeth',
-    text: 'Brush teeth',
-    imagePath: '/aac-images/brush-teeth.jpg',
-    category: 'actions'
-  },
-
+ 
+ 
 ];
 
 export const categories = ['all', 'greetings', 'needs', 'actions', 'descriptors', 'responses'];
