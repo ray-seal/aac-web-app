@@ -91,6 +91,12 @@ export const aacSymbols: AacSymbol[] = [
     imagePath: '/aac-images/meds.jpg',
     category: 'actions'
   },
+  {
+    id: 'swing',
+    text: 'Swing',
+    imagePath: '/aac-images/swing.jpg',
+    category: 'actions'
+  },
   
   {
     id: 'sleep',
