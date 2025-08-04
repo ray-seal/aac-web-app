@@ -85,6 +85,12 @@ export const aacSymbols: AacSymbol[] = [
     imagePath: '/aac-images/pasta.jpg',
     category: 'food'
   },
+{
+    id: 'tablet',
+    text: 'Tablet',
+    imagePath: '/aac-images/tablet.jpg',
+    category: 'things'
+  },
   {
     id: 'meds',
     text: 'Take meds',
@@ -123,12 +129,7 @@ export const aacSymbols: AacSymbol[] = [
     imagePath: '/aac-images/underwear.jpg',
     category: 'actions'
   },
-   {
-    id: 'tablet',
-    text: 'Tablet',
-    imagePath: '/aac-images/tablet.jpg',
-    category: 'things'
-  },
+   
   {
     id: 'shoes-on',
     text: 'Put shoes on',
