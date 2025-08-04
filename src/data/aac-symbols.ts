@@ -7,45 +7,51 @@ export interface AacSymbol {
 
 export const aacSymbols: AacSymbol[] = [
   {
+    id: 'i want',
+    text: 'I want',
+    imagePath: '/aac-images/i-want.jpg',
+    category: 'actions'
+  },
+  {
     id: 'hello',
-    text: 'hello',
+    text: 'Hello',
     imagePath: '/aac-images/hello.svg',
     category: 'greetings'
   },
   
   {
     id: 'eat',
-    text: 'eat',
+    text: 'To eat',
     imagePath: '/aac-images/eat.svg',
     category: 'actions'
   },
   {
     id: 'more',
-    text: 'more',
+    text: 'More',
     imagePath: '/aac-images/more.svg',
     category: 'descriptors'
   },
   {
     id: 'help',
-    text: 'help',
+    text: 'Help',
     imagePath: '/aac-images/help.svg',
     category: 'needs'
   },
   {
     id: 'stop',
-    text: 'stop',
+    text: 'Stop',
     imagePath: '/aac-images/stop.svg',
     category: 'actions'
   },
   {
     id: 'yes',
-    text: 'yes',
+    text: 'Yes',
     imagePath: '/aac-images/yes.svg',
     category: 'responses'
   },
   {
     id: 'no',
-    text: 'no',
+    text: 'No',
     imagePath: '/aac-images/no.svg',
     category: 'responses'
   },
@@ -69,13 +75,6 @@ export const aacSymbols: AacSymbol[] = [
     text: 'Drink',
     imagePath: '/aac-images/drink.png',
     category: 'food'
-  },
-  
-  {
-    id: 'i want',
-    text: 'I want',
-    imagePath: '/aac-images/i-want.jpg',
-    category: 'actions'
   },
   
   {
