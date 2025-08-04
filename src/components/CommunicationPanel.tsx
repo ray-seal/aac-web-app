@@ -1,7 +1,7 @@
-// src/components/CommunicationPanel.tsx
 import React, { useState } from 'react'
 import { AACGrid } from './AACGrid'
 import { aacSymbols } from '../data/aac-symbols'
+import { useNavigate } from 'react-router-dom'
 
 export const CommunicationPanel: React.FC = () => {
   const [message, setMessage] = useState<string>('')
@@ -20,6 +20,8 @@ export const CommunicationPanel: React.FC = () => {
   }
 
   const handleClear = () => setMessage('')
+
+  const navigate = useNavigate()
 
   return (
     <section className="p-4">
@@ -48,6 +50,13 @@ export const CommunicationPanel: React.FC = () => {
             className="px-4 py-2 bg-gray-300 text-black rounded hover:bg-gray-400"
           >
             Clear
+          </button>
+          <button
+            onClick={() => navigate('/parent')}
+            aria-label="Parent area"
+            className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
+          >
+            Parent
           </button>
         </div>
       </div>
