@@ -12,6 +12,7 @@ export const aacSymbols: AacSymbol[] = [
     imagePath: '/aac-images/i-want.jpg',
     category: 'actions'
   },
+<h1>Food</h1>
    {
     id: 'cheese',
     text: 'Cheese',
