@@ -50,6 +50,22 @@ export default function HomePage() {
     setSelectedSymbols([...selectedSymbols, symbol])
   }
 
+  // Handler for selecting a favourite (convert to AacSymbol)
+  function handleSelectFavourite(fav: any) {
+    // For AAC-type favourites, image_url is already correct
+    // For uploads, use getImageUrl
+    const imagePath = fav.type === 'aac'
+      ? fav.image_url
+      : getImageUrl(fav.image_url)
+    const symbol: AacSymbol = {
+      id: fav.id?.toString() ?? fav.label,
+      text: fav.label,
+      imagePath,
+      category: fav.type ?? 'favourite'
+    }
+    setSelectedSymbols([...selectedSymbols, symbol])
+  }
+
   // Handler for speaking the sentence
   function handleSpeakSentence() {
     if (!selectedSymbols.length) return
@@ -64,33 +80,26 @@ export default function HomePage() {
     setSelectedSymbols([])
   }
 
-  // Handler for speaking a single symbol in Favourites
-  function handleSpeak(label: string) {
-    const utterance = new SpeechSynthesisUtterance(label)
-    window.speechSynthesis.speak(utterance)
-  }
-
-  // Favourites grid format (uses supabase favourites)
+  // Favourites grid: clicking adds to communication box just like AAC symbols
   function renderFavouritesGrid() {
     if (!favourites.length)
       return <div className="p-4 text-center text-gray-500">No favourites yet.</div>
     return (
       <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4">
         {favourites.map((fav: any) => (
-          <div key={fav.id} className="border rounded p-2 flex flex-col items-center bg-gray-50">
+          <button
+            key={fav.id}
+            className="border rounded p-2 flex flex-col items-center bg-gray-50 focus:outline-none"
+            onClick={() => handleSelectFavourite(fav)}
+            type="button"
+          >
             <img
               src={fav.type === 'aac' ? fav.image_url : getImageUrl(fav.image_url)}
               alt={fav.label}
               className="w-16 h-16 object-cover rounded mb-2"
             />
             <div className="text-center text-xs font-medium mb-1">{fav.label}</div>
-            <button
-              onClick={() => handleSpeak(fav.label)}
-              className="px-2 py-1 bg-blue-500 text-white rounded text-xs"
-            >
-              Speak
-            </button>
-          </div>
+          </button>
         ))}
       </div>
     )
