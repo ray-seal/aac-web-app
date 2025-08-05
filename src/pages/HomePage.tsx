@@ -69,6 +69,10 @@ export default function HomePage() {
   // Handler for selecting a symbol from the AAC grid
   function handleSelectSymbol(symbol: AacSymbol) {
     setSelectedSymbols([...selectedSymbols, symbol])
+
+    // Text-to-Speech for the pressed symbol
+    const utterance = new window.SpeechSynthesisUtterance(symbol.text)
+    window.speechSynthesis.speak(utterance)
   }
 
   // Handler for selecting a favourite (convert to AacSymbol)
