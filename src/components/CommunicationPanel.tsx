@@ -1,25 +1,25 @@
 import React, { useState } from 'react'
 import { AACGrid } from './AACGrid'
-import { aacSymbols } from '../data/aac-symbols'
+import { aacSymbols, AacSymbol } from '../data/aac-symbols'
 import { useNavigate } from 'react-router-dom'
 
 export const CommunicationPanel: React.FC = () => {
-  const [message, setMessage] = useState<string>('')
+  const [selectedSymbols, setSelectedSymbols] = useState<AacSymbol[]>([])
 
-  const handleSelect = (text: string) => {
-    setMessage((prev) => (prev ? `${prev} ${text}` : text))
-
-    const utterance = new SpeechSynthesisUtterance(text)
+  const handleSelect = (symbol: AacSymbol) => {
+    setSelectedSymbols((prev) => [...prev, symbol])
+    const utterance = new SpeechSynthesisUtterance(symbol.text)
     speechSynthesis.speak(utterance)
   }
 
   const handleSpeakMessage = () => {
-    if (!message) return
+    if (!selectedSymbols.length) return
+    const message = selectedSymbols.map(s => s.text).join(' ')
     const utterance = new SpeechSynthesisUtterance(message)
     speechSynthesis.speak(utterance)
   }
 
-  const handleClear = () => setMessage('')
+  const handleClear = () => setSelectedSymbols([])
 
   const navigate = useNavigate()
 
@@ -28,16 +28,25 @@ export const CommunicationPanel: React.FC = () => {
       <h1 className="text-2xl font-bold mb-4">Communication Board</h1>
 
       <div className="mb-4 p-3 border rounded-lg bg-gray-100">
-        <p className="text-lg font-medium">
-          Message: {message || <em>(Tap symbols to build message)</em>}
-        </p>
+        <div className="flex flex-wrap gap-2 mb-2">
+          {selectedSymbols.length === 0 ? (
+            <em className="text-gray-500">(Tap symbols to build message)</em>
+          ) : (
+            selectedSymbols.map((symbol, idx) => (
+              <span key={idx} className="px-2 py-1 bg-white border rounded flex items-center gap-1">
+                <img src={symbol.imagePath} alt={symbol.text} className="w-6 h-6 inline-block" />
+                {symbol.text}
+              </span>
+            ))
+          )}
+        </div>
         <div className="mt-2 flex gap-2">
           <button
             onClick={handleSpeakMessage}
-            disabled={!message}
+            disabled={selectedSymbols.length === 0}
             aria-label="Speak the full message"
             className={`px-4 py-2 rounded ${
-              message
+              selectedSymbols.length
                 ? 'bg-blue-500 text-white hover:bg-blue-600'
                 : 'bg-gray-300 text-gray-600 cursor-not-allowed'
             }`}
