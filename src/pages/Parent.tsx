@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { aacSymbols, AacSymbol } from '../data/aac-symbols'
-import { uploadImage, getImageUrl } from '../utils/uploadImage'
+import { uploadImage, getSignedImageUrl } from '../utils/uploadImage'
+import { useNavigate } from 'react-router-dom'
 
 export default function Parent() {
   const [user, setUser] = useState<any>(null)
@@ -14,6 +15,9 @@ export default function Parent() {
   const [uploading, setUploading] = useState(false)
   const [uploadLabel, setUploadLabel] = useState('')
   const [uploadFile, setUploadFile] = useState<File | null>(null)
+  const [signedUrls, setSignedUrls] = useState<{ [id: number]: string }>({})
+
+  const navigate = useNavigate()
 
   // Auth logic
   useEffect(() => {
@@ -43,6 +47,20 @@ export default function Parent() {
       .order('created_at', { ascending: false })
     setFavourites(data ?? [])
   }
+
+  // Whenever favourites load, get all signed URLs for uploads
+  useEffect(() => {
+    async function loadSignedUrls() {
+      const uploads = favourites.filter(f => f.type !== 'aac')
+      const urlMap: { [id: number]: string } = {}
+      await Promise.all(uploads.map(async (fav) => {
+        const url = await getSignedImageUrl(fav.image_url)
+        urlMap[fav.id] = url
+      }))
+      setSignedUrls(urlMap)
+    }
+    if (favourites.length > 0) loadSignedUrls()
+  }, [favourites])
 
   // Auth form handler
   const handleAuth = async (e: React.FormEvent) => {
@@ -79,7 +97,6 @@ export default function Parent() {
     const path = await uploadImage(uploadFile, user.id)
     setUploading(false)
     if (!path) return
-    // --- FIX for RLS: set user_id and check policy on supabase dashboard ---
     const { error } = await supabase
       .from('favourites')
       .insert([{ user_id: user.id, image_url: path, label: uploadLabel, type: 'upload' }])
@@ -101,10 +118,8 @@ export default function Parent() {
   // Add AAC symbol to favourites
   async function addAacToFavourites(symbol: AacSymbol) {
     if (!user) return
-    // Avoid duplicates
     const exists = favourites.some(f => f.type === 'aac' && f.label === symbol.text)
     if (exists) return
-    // Use fields matching AacSymbol
     const { error } = await supabase
       .from('favourites')
       .insert([{ user_id: user.id, image_url: symbol.imagePath, label: symbol.text, type: 'aac' }])
@@ -112,7 +127,6 @@ export default function Parent() {
     else if (error) setError(error.message)
   }
 
-  // --- AUTH UI ---
   if (!user) {
     return (
       <div className="max-w-md mx-auto mt-10 p-4 bg-white rounded shadow">
@@ -157,7 +171,15 @@ export default function Parent() {
   return (
     <div className="max-w-4xl mx-auto mt-10 p-4 bg-white rounded shadow">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold">Welcome, Parent!</h2>
+        <div className="flex gap-2">
+          <button
+            className="bg-gray-400 text-white px-4 py-2 rounded"
+            onClick={() => navigate('/')}
+          >
+            Back
+          </button>
+          <h2 className="text-2xl font-bold">Welcome, Parent!</h2>
+        </div>
         <button
           className="bg-gray-500 text-white px-4 py-2 rounded"
           onClick={handleSignOut}
@@ -232,9 +254,12 @@ export default function Parent() {
           {favourites.map((fav: any) => (
             <div key={fav.id} className="border rounded p-2 flex flex-col items-center bg-gray-50">
               <img
-                src={fav.type === 'aac' ? fav.image_url : getImageUrl(fav.image_url)}
+                src={fav.type === 'aac'
+                  ? fav.image_url
+                  : (signedUrls[fav.id] || '')}
                 alt={fav.label}
                 className="w-16 h-16 object-cover rounded mb-2"
+                style={{ background: '#E0E7EF' }}
               />
               <div className="text-center text-xs font-medium mb-1">{fav.label}</div>
               <button
