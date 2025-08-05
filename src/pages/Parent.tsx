@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
+import { aacSymbols } from '../data/aac-symbols'
 import { uploadImage, getImageUrl } from '../utils/uploadImage'
 
 export const Parent: React.FC = () => {
@@ -11,6 +12,8 @@ export const Parent: React.FC = () => {
   const [loading, setLoading] = useState(false)
   const [favourites, setFavourites] = useState<any[]>([])
   const [uploading, setUploading] = useState(false)
+  const [uploadLabel, setUploadLabel] = useState('')
+  const [uploadFile, setUploadFile] = useState<File | null>(null)
 
   // Auth logic
   useEffect(() => {
@@ -68,20 +71,20 @@ export const Parent: React.FC = () => {
     setFavourites([])
   }
 
-  // Image upload handler
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    if (!user) return
-    const file = e.target.files?.[0]
-    if (!file) return
+  // Upload handler with label
+  async function handleUploadSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!user || !uploadFile || !uploadLabel) return
     setUploading(true)
-    const path = await uploadImage(file, user.id)
+    const path = await uploadImage(uploadFile, user.id)
     setUploading(false)
     if (!path) return
-    // Add to favourites table
     const { error } = await supabase
       .from('favourites')
-      .insert({ user_id: user.id, image_url: path })
+      .insert({ user_id: user.id, image_url: path, label: uploadLabel, type: 'upload' })
     if (!error) {
+      setUploadLabel('')
+      setUploadFile(null)
       fetchFavourites()
     }
   }
@@ -92,7 +95,19 @@ export const Parent: React.FC = () => {
     setFavourites(favourites.filter(f => f.id !== favId))
   }
 
-  // Speak image label if you want (add a label field to favourites table if needed)
+  // Add AAC symbol to favourites
+  async function addAacToFavourites(symbol: any) {
+    if (!user) return
+    // Avoid duplicates
+    const exists = favourites.some(f => f.type === 'aac' && f.label === symbol.label)
+    if (exists) return
+    const { error } = await supabase
+      .from('favourites')
+      .insert({ user_id: user.id, image_url: symbol.image, label: symbol.label, type: 'aac' })
+    if (!error) fetchFavourites()
+  }
+
+  // TTS
   function handleSpeak(text: string) {
     const utterance = new window.SpeechSynthesisUtterance(text)
     window.speechSynthesis.speak(utterance)
@@ -140,9 +155,9 @@ export const Parent: React.FC = () => {
     )
   }
 
-  // --- FAVOURITES UI ---
+  // --- MAIN UI ---
   return (
-    <div className="max-w-3xl mx-auto mt-10 p-4 bg-white rounded shadow">
+    <div className="max-w-4xl mx-auto mt-10 p-4 bg-white rounded shadow">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold">Welcome, Parent!</h2>
         <button
@@ -153,27 +168,85 @@ export const Parent: React.FC = () => {
         </button>
       </div>
       <p className="mb-4">You are signed in as <span className="font-mono">{user.email}</span></p>
-      <div className="mt-4">
+
+      {/* 1. Upload new image */}
+      <div className="mb-8">
+        <h3 className="font-bold mb-2">Upload new favourite</h3>
+        <form onSubmit={handleUploadSubmit} className="flex gap-2 items-end flex-wrap">
+          <input
+            type="file"
+            accept="image/*"
+            onChange={e => setUploadFile(e.target.files?.[0] ?? null)}
+            disabled={uploading}
+            className="border rounded p-2"
+            required
+          />
+          <input
+            type="text"
+            value={uploadLabel}
+            onChange={e => setUploadLabel(e.target.value)}
+            placeholder="Label for this image"
+            className="border rounded p-2"
+            required
+          />
+          <button
+            type="submit"
+            className="bg-green-600 text-white px-4 py-2 rounded"
+            disabled={uploading}
+          >
+            {uploading ? 'Uploading...' : 'Add'}
+          </button>
+        </form>
+      </div>
+
+      {/* 2. All AAC symbols with 'add to favourites' */}
+      <div className="mb-8">
+        <h3 className="font-bold mb-2">All AAC Symbols (add to favourites)</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4">
+          {aacSymbols.map((symbol: any) => (
+            <div key={symbol.label} className="border rounded p-2 flex flex-col items-center bg-gray-50">
+              <img
+                src={symbol.image}
+                alt={symbol.label}
+                className="w-16 h-16 object-cover rounded mb-2"
+              />
+              <div className="text-center text-xs font-medium mb-1">{symbol.label}</div>
+              <button
+                onClick={() => handleSpeak(symbol.label)}
+                className="px-2 py-1 bg-blue-500 text-white rounded text-xs mb-1"
+              >
+                Speak
+              </button>
+              <button
+                onClick={() => addAacToFavourites(symbol)}
+                className="px-2 py-1 bg-green-500 text-white rounded text-xs"
+                disabled={favourites.some(f => f.type === 'aac' && f.label === symbol.label)}
+              >
+                {favourites.some(f => f.type === 'aac' && f.label === symbol.label) ? 'Added' : 'Add to Favourites'}
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 3. Favourites grid */}
+      <div>
         <h3 className="font-bold mb-2">Your Favourites</h3>
-        <label className="block mb-2">
-          <span className="mr-2 font-medium">Add a new image:</span>
-          <input type="file" accept="image/*" onChange={handleFileChange} disabled={uploading} />
-          {uploading && <span className="ml-2 text-sm text-gray-500">Uploading...</span>}
-        </label>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mt-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4 mt-4">
           {favourites.length === 0 && (
             <p className="col-span-full text-gray-600 text-center">(No favourites yet)</p>
           )}
           {favourites.map(fav => (
             <div key={fav.id} className="border rounded p-2 flex flex-col items-center bg-gray-50">
               <img
-                src={getImageUrl(fav.image_url)}
-                alt="Favourite"
-                className="w-24 h-24 object-cover rounded mb-2"
+                src={fav.type === 'aac' ? fav.image_url : getImageUrl(fav.image_url)}
+                alt={fav.label}
+                className="w-16 h-16 object-cover rounded mb-2"
               />
+              <div className="text-center text-xs font-medium mb-1">{fav.label}</div>
               <div className="flex gap-2">
                 <button
-                  onClick={() => handleSpeak('Favourite image')}
+                  onClick={() => handleSpeak(fav.label)}
                   className="px-2 py-1 bg-blue-500 text-white rounded text-xs"
                 >
                   Speak
