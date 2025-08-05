@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { aacSymbols, AacSymbol } from '../data/aac-symbols'
 import { supabase } from '../supabaseClient'
 import { getSignedImageUrl } from '../utils/uploadImage'
+import { AACGrid } from '../components/AACGrid'
 
 export default function HomePage() {
   const [tab, setTab] = useState<'aac' | 'favourites'>('aac')
