@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { aacSymbols } from '../data/aac-symbols'
+import { aacSymbols, AacSymbol } from '../data/aac-symbols'
 import { supabase } from '../supabaseClient'
 import { getImageUrl } from '../utils/uploadImage'
+import { AACGrid } from '../components/AACGrid'
 
 export default function HomePage() {
   const [tab, setTab] = useState<'aac' | 'favourites'>('aac')
@@ -10,7 +11,7 @@ export default function HomePage() {
   const [favourites, setFavourites] = useState<any[]>([])
 
   // Communication box state
-  const [selectedSymbols, setSelectedSymbols] = useState<any[]>([])
+  const [selectedSymbols, setSelectedSymbols] = useState<AacSymbol[]>([])
 
   // Auth/user state
   useEffect(() => {
@@ -45,7 +46,7 @@ export default function HomePage() {
   }
 
   // Handler for selecting a symbol from the AAC grid
-  function handleSelectSymbol(symbol: any) {
+  function handleSelectSymbol(symbol: AacSymbol) {
     setSelectedSymbols([...selectedSymbols, symbol])
   }
 
@@ -53,7 +54,7 @@ export default function HomePage() {
   function handleSpeakSentence() {
     if (!selectedSymbols.length) return
     const utterance = new window.SpeechSynthesisUtterance(
-      selectedSymbols.map(s => s.label).join(' ')
+      selectedSymbols.map(s => s.text).join(' ')
     )
     window.speechSynthesis.speak(utterance)
   }
@@ -69,7 +70,7 @@ export default function HomePage() {
     window.speechSynthesis.speak(utterance)
   }
 
-  // Favourites grid format (matches AACGrid)
+  // Favourites grid format (uses supabase favourites)
   function renderFavouritesGrid() {
     if (!favourites.length)
       return <div className="p-4 text-center text-gray-500">No favourites yet.</div>
@@ -95,29 +96,6 @@ export default function HomePage() {
     )
   }
 
-  // AAC grid for homepage: clicking adds to communication box
-  function renderAACGrid() {
-    return (
-      <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4">
-        {aacSymbols.map((symbol: any, idx: number) => (
-          <button
-            key={symbol.label + idx}
-            className="border rounded p-2 flex flex-col items-center bg-gray-50 hover:bg-blue-100 transition"
-            onClick={() => handleSelectSymbol(symbol)}
-            type="button"
-          >
-            <img
-              src={symbol.image}
-              alt={symbol.label}
-              className="w-16 h-16 object-cover rounded mb-2"
-            />
-            <div className="text-center text-xs font-medium">{symbol.label}</div>
-          </button>
-        ))}
-      </div>
-    )
-  }
-
   return (
     <div className="max-w-4xl mx-auto mt-10 p-4 bg-white rounded shadow">
       {/* Parent Link */}
@@ -128,10 +106,10 @@ export default function HomePage() {
       {/* Communication Box */}
       <div className="mb-6 p-4 border rounded bg-gray-100 flex items-center">
         <div className="flex gap-2 flex-wrap">
-          {selectedSymbols.map((symbol: any, idx: number) => (
+          {selectedSymbols.map((symbol, idx) => (
             <span key={idx} className="px-2 py-1 bg-white border rounded flex items-center gap-1">
-              <img src={symbol.image} alt={symbol.label} className="w-6 h-6 inline-block" />
-              {symbol.label}
+              <img src={symbol.imagePath} alt={symbol.text} className="w-6 h-6 inline-block" />
+              {symbol.text}
             </span>
           ))}
         </div>
@@ -168,7 +146,12 @@ export default function HomePage() {
           </button>
         )}
       </div>
-      {tab === 'aac' && renderAACGrid()}
+      {tab === 'aac' && (
+        <AACGrid
+          items={aacSymbols}
+          onSelect={handleSelectSymbol}
+        />
+      )}
       {tab === 'favourites' && user && renderFavouritesGrid()}
     </div>
   )
