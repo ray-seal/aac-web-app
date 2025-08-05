@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { AACGrid } from '../components/AACGrid'
 import { aacSymbols } from '../data/aac-symbols'
 import { supabase } from '../supabaseClient'
