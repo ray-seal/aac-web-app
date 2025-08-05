@@ -2,13 +2,13 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { aacSymbols, AacSymbol } from '../data/aac-symbols'
 import { supabase } from '../supabaseClient'
-import { getImageUrl } from '../utils/uploadImage'
-import { AACGrid } from '../components/AACGrid'
+import { getSignedImageUrl } from '../utils/uploadImage'
 
 export default function HomePage() {
   const [tab, setTab] = useState<'aac' | 'favourites'>('aac')
   const [user, setUser] = useState<any>(null)
   const [favourites, setFavourites] = useState<any[]>([])
+  const [signedUrls, setSignedUrls] = useState<{ [id: number]: string }>({})
 
   // Communication box state
   const [selectedSymbols, setSelectedSymbols] = useState<AacSymbol[]>([])
@@ -30,6 +30,7 @@ export default function HomePage() {
   useEffect(() => {
     if (!user) {
       setFavourites([])
+      setSignedUrls({})
       return
     }
     fetchFavourites()
@@ -45,6 +46,25 @@ export default function HomePage() {
     setFavourites(data ?? [])
   }
 
+  // Load signed URLs for uploads
+  useEffect(() => {
+    async function loadSignedUrls() {
+      const uploads = favourites.filter(f => f.type !== 'aac')
+      const urlMap: { [id: number]: string } = {}
+      await Promise.all(
+        uploads.map(async fav => {
+          urlMap[fav.id] = await getSignedImageUrl(fav.image_url)
+        })
+      )
+      setSignedUrls(urlMap)
+    }
+    if (favourites.length > 0) {
+      loadSignedUrls()
+    } else {
+      setSignedUrls({})
+    }
+  }, [favourites])
+
   // Handler for selecting a symbol from the AAC grid
   function handleSelectSymbol(symbol: AacSymbol) {
     setSelectedSymbols([...selectedSymbols, symbol])
@@ -52,11 +72,9 @@ export default function HomePage() {
 
   // Handler for selecting a favourite (convert to AacSymbol)
   function handleSelectFavourite(fav: any) {
-    // For AAC-type favourites, image_url is already correct
-    // For uploads, use getImageUrl
     const imagePath = fav.type === 'aac'
       ? fav.image_url
-      : getImageUrl(fav.image_url)
+      : signedUrls[fav.id] || ''
     const symbol: AacSymbol = {
       id: fav.id?.toString() ?? fav.label,
       text: fav.label,
@@ -94,7 +112,7 @@ export default function HomePage() {
             type="button"
           >
             <img
-              src={fav.type === 'aac' ? fav.image_url : getImageUrl(fav.image_url)}
+              src={fav.type === 'aac' ? fav.image_url : (signedUrls[fav.id] || '')}
               alt={fav.label}
               className="w-16 h-16 object-cover rounded mb-2"
             />
