@@ -1,8 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import HomePage from './pages/HomePage'
 import { NotFoundPage } from './pages/NotFoundPage'
-import { Parent } from './pages/Parent'
-
+import Parent from './pages/Parent'
 function App() {
   return (
     <Router>
