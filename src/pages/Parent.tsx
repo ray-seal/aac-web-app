@@ -5,17 +5,29 @@ import { uploadImage, getSignedImageUrl } from '../utils/uploadImage'
 import { useNavigate } from 'react-router-dom'
 
 export default function Parent() {
+  // Auth and user state
   const [user, setUser] = useState<any>(null)
+  const [profile, setProfile] = useState<any>(null)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [mode, setMode] = useState<'signup' | 'signin'>('signup')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // PIN lock state
+  const [pinInput, setPinInput] = useState('')
+  const [pinSetInput, setPinSetInput] = useState('')
+  const [pinConfirmInput, setPinConfirmInput] = useState('')
+  const [pinError, setPinError] = useState('')
+  const [pinSetError, setPinSetError] = useState('')
+  const [pinUnlocked, setPinUnlocked] = useState(false)
+
+  // Favourites and uploads
   const [favourites, setFavourites] = useState<any[]>([])
+  const [signedUrls, setSignedUrls] = useState<{ [id: number]: string }>({})
   const [uploading, setUploading] = useState(false)
   const [uploadLabel, setUploadLabel] = useState('')
   const [uploadFile, setUploadFile] = useState<File | null>(null)
-  const [signedUrls, setSignedUrls] = useState<{ [id: number]: string }>({})
 
   const navigate = useNavigate()
 
@@ -31,6 +43,20 @@ export default function Parent() {
       listener?.subscription.unsubscribe()
     }
   }, [])
+
+  // Load user profile (for PIN)
+  useEffect(() => {
+    async function fetchProfile() {
+      if (!user) return setProfile(null)
+      const { data } = await supabase
+        .from('profiles')
+        .select('parent_pin')
+        .eq('id', user.id)
+        .single()
+      setProfile(data)
+    }
+    fetchProfile()
+  }, [user])
 
   // Fetch favourites for this user
   useEffect(() => {
@@ -54,12 +80,12 @@ export default function Parent() {
       const uploads = favourites.filter(f => f.type !== 'aac')
       const urlMap: { [id: number]: string } = {}
       await Promise.all(uploads.map(async (fav) => {
-        const url = await getSignedImageUrl(fav.image_url)
-        urlMap[fav.id] = url
+        urlMap[fav.id] = await getSignedImageUrl(fav.image_url)
       }))
       setSignedUrls(urlMap)
     }
     if (favourites.length > 0) loadSignedUrls()
+    else setSignedUrls({})
   }, [favourites])
 
   // Auth form handler
@@ -87,6 +113,8 @@ export default function Parent() {
     await supabase.auth.signOut()
     setUser(null)
     setFavourites([])
+    setProfile(null)
+    setPinUnlocked(false)
   }
 
   // Upload handler with label
@@ -127,6 +155,45 @@ export default function Parent() {
     else if (error) setError(error.message)
   }
 
+  // PIN: Set PIN
+  async function handleSetPin(e: React.FormEvent) {
+    e.preventDefault()
+    setPinSetError('')
+    if (!/^\d{4}$/.test(pinSetInput)) {
+      setPinSetError('PIN must be exactly 4 digits')
+      return
+    }
+    if (pinSetInput !== pinConfirmInput) {
+      setPinSetError('PINs do not match')
+      return
+    }
+    // Update profile
+    const { error } = await supabase
+      .from('profiles')
+      .update({ parent_pin: pinSetInput })
+      .eq('id', user.id)
+    if (error) {
+      setPinSetError('Failed to set PIN')
+      return
+    }
+    setProfile({ ...profile, parent_pin: pinSetInput })
+    setPinUnlocked(true)
+  }
+
+  // PIN: Check PIN
+  function handleCheckPin(e: React.FormEvent) {
+    e.preventDefault()
+    setPinError('')
+    if (pinInput === profile.parent_pin) {
+      setPinUnlocked(true)
+      setPinInput('')
+    } else {
+      setPinError('Incorrect PIN. Please try again.')
+      setPinInput('')
+    }
+  }
+
+  // Render: not logged in
   if (!user) {
     return (
       <div className="max-w-md mx-auto mt-10 p-4 bg-white rounded shadow">
@@ -168,6 +235,77 @@ export default function Parent() {
     )
   }
 
+  // PIN: Prompt for PIN if set and not unlocked
+  if (profile && profile.parent_pin && !pinUnlocked) {
+    return (
+      <div className="max-w-xs mx-auto mt-20 p-6 bg-white rounded shadow flex flex-col items-center">
+        <h2 className="text-lg font-semibold mb-2">Enter Parent PIN</h2>
+        <form onSubmit={handleCheckPin} className="flex flex-col gap-3 w-full">
+          <input
+            type="password"
+            pattern="\d{4}"
+            inputMode="numeric"
+            maxLength={4}
+            value={pinInput}
+            onChange={e => setPinInput(e.target.value.replace(/\D/g, '').slice(0,4))}
+            className="border p-2 rounded text-center tracking-widest text-xl"
+            placeholder="4-digit PIN"
+            autoFocus
+          />
+          <button
+            type="submit"
+            className="bg-blue-600 text-white py-2 rounded"
+          >
+            Unlock
+          </button>
+          {pinError && <div className="text-red-600 text-center">{pinError}</div>}
+        </form>
+      </div>
+    )
+  }
+
+  // PIN: Prompt to set PIN if none set
+  if (profile && !profile.parent_pin) {
+    return (
+      <div className="max-w-xs mx-auto mt-20 p-6 bg-white rounded shadow flex flex-col items-center">
+        <h2 className="text-lg font-semibold mb-2">Set Parent PIN</h2>
+        <form onSubmit={handleSetPin} className="flex flex-col gap-3 w-full">
+          <input
+            type="password"
+            pattern="\d{4}"
+            inputMode="numeric"
+            maxLength={4}
+            value={pinSetInput}
+            onChange={e => setPinSetInput(e.target.value.replace(/\D/g, '').slice(0,4))}
+            className="border p-2 rounded text-center tracking-widest text-xl"
+            placeholder="Choose 4-digit PIN"
+            autoFocus
+            required
+          />
+          <input
+            type="password"
+            pattern="\d{4}"
+            inputMode="numeric"
+            maxLength={4}
+            value={pinConfirmInput}
+            onChange={e => setPinConfirmInput(e.target.value.replace(/\D/g, '').slice(0,4))}
+            className="border p-2 rounded text-center tracking-widest text-xl"
+            placeholder="Confirm 4-digit PIN"
+            required
+          />
+          <button
+            type="submit"
+            className="bg-green-600 text-white py-2 rounded"
+          >
+            Set PIN
+          </button>
+          {pinSetError && <div className="text-red-600 text-center">{pinSetError}</div>}
+        </form>
+      </div>
+    )
+  }
+
+  // Main Parent content (unlocked)
   return (
     <div className="max-w-4xl mx-auto mt-10 p-4 bg-white rounded shadow">
       <div className="flex justify-between items-center mb-6">
