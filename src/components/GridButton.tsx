@@ -1,9 +1,8 @@
-// src/components/GridButton.tsx
 import { AacSymbol } from '../data/aac-symbols'
 
 type GridButtonProps = {
   symbol: AacSymbol
-  onClick: (text: string) => void
+  onClick: () => void
 }
 
 export const GridButton: React.FC<GridButtonProps> = ({ symbol, onClick }) => {
@@ -11,7 +10,7 @@ export const GridButton: React.FC<GridButtonProps> = ({ symbol, onClick }) => {
 
   return (
     <button
-      onClick={() => onClick(text)}
+      onClick={onClick}
       className="w-full h-full p-4 border rounded-lg bg-white hover:bg-blue-100 text-lg flex flex-col items-center"
     >
       {imagePath && (
