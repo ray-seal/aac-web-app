@@ -10,18 +10,20 @@ export async function uploadImage(file: File, userId: string): Promise<string | 
     console.error('Upload error:', error)
     return null
   }
-  return data.path // path to store in DB
+  return data.path
 }
 
-// Async: get a signed URL for a private file
+/**
+ * Returns a signed URL for a private upload.
+ * Use this for rendering user-uploaded images.
+ */
 export async function getSignedImageUrl(path: string): Promise<string> {
   if (!path) return ''
-  // Clean up the path in case it includes bucket info
   const cleanedPath = path.replace(/^public\/user-uploads\//, '').replace(/^user-uploads\//, '')
   const { data, error } = await supabase
     .storage
     .from('user-uploads')
-    .createSignedUrl(cleanedPath, 60 * 60) // valid for 1 hour
+    .createSignedUrl(cleanedPath, 60 * 60)
   if (error) {
     console.error('Signed URL error:', error)
     return ''
