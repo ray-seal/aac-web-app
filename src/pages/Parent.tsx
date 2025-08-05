@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
-import { aacSymbols } from '../data/aac-symbols'
+import { aacSymbols, AacSymbol } from '../data/aac-symbols'
 import { uploadImage, getImageUrl } from '../utils/uploadImage'
 
 export default function Parent() {
@@ -79,13 +79,16 @@ export default function Parent() {
     const path = await uploadImage(uploadFile, user.id)
     setUploading(false)
     if (!path) return
+    // --- FIX for RLS: set user_id and check policy on supabase dashboard ---
     const { error } = await supabase
       .from('favourites')
-      .insert({ user_id: user.id, image_url: path, label: uploadLabel, type: 'upload' })
+      .insert([{ user_id: user.id, image_url: path, label: uploadLabel, type: 'upload' }])
     if (!error) {
       setUploadLabel('')
       setUploadFile(null)
       fetchFavourites()
+    } else if (error) {
+      setError(error.message)
     }
   }
 
@@ -96,15 +99,17 @@ export default function Parent() {
   }
 
   // Add AAC symbol to favourites
-  async function addAacToFavourites(symbol: any) {
+  async function addAacToFavourites(symbol: AacSymbol) {
     if (!user) return
     // Avoid duplicates
-    const exists = favourites.some(f => f.type === 'aac' && f.label === symbol.label)
+    const exists = favourites.some(f => f.type === 'aac' && f.label === symbol.text)
     if (exists) return
+    // Use fields matching AacSymbol
     const { error } = await supabase
       .from('favourites')
-      .insert({ user_id: user.id, image_url: symbol.image, label: symbol.label, type: 'aac' })
+      .insert([{ user_id: user.id, image_url: symbol.imagePath, label: symbol.text, type: 'aac' }])
     if (!error) fetchFavourites()
+    else if (error) setError(error.message)
   }
 
   // --- AUTH UI ---
@@ -190,26 +195,27 @@ export default function Parent() {
             {uploading ? 'Uploading...' : 'Add'}
           </button>
         </form>
+        {error && <div className="text-red-600 mt-2">{error}</div>}
       </div>
 
       {/* All AAC symbols with 'add to favourites' */}
       <div className="mb-8">
         <h3 className="font-bold mb-2">All AAC Symbols (add to favourites)</h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4">
-          {aacSymbols.map((symbol: any) => (
-            <div key={symbol.label} className="border rounded p-2 flex flex-col items-center bg-gray-50">
+          {aacSymbols.map((symbol: AacSymbol) => (
+            <div key={symbol.id} className="border rounded p-2 flex flex-col items-center bg-gray-50">
               <img
-                src={symbol.image}
-                alt={symbol.label}
+                src={symbol.imagePath}
+                alt={symbol.text}
                 className="w-16 h-16 object-cover rounded mb-2"
               />
-              <div className="text-center text-xs font-medium mb-1">{symbol.label}</div>
+              <div className="text-center text-xs font-medium mb-1">{symbol.text}</div>
               <button
                 onClick={() => addAacToFavourites(symbol)}
                 className="px-2 py-1 bg-green-500 text-white rounded text-xs"
-                disabled={favourites.some(f => f.type === 'aac' && f.label === symbol.label)}
+                disabled={favourites.some(f => f.type === 'aac' && f.label === symbol.text)}
               >
-                {favourites.some(f => f.type === 'aac' && f.label === symbol.label) ? 'Added' : 'Add to Favourites'}
+                {favourites.some(f => f.type === 'aac' && f.label === symbol.text) ? 'Added' : 'Add to Favourites'}
               </button>
             </div>
           ))}
