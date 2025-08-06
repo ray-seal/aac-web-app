@@ -6,7 +6,7 @@ import { getSignedImageUrl } from '../utils/uploadImage'
 import { AACGrid } from '../components/AACGrid'
 
 export default function HomePage() {
-  const [tab, setTab] = useState<'aac' | 'favourites'>('aac')
+  const [tab, setTab] = useState<'aac' | 'favourites' | null>(null)
   const [user, setUser] = useState<any>(null)
   const [favourites, setFavourites] = useState<any[]>([])
   const [signedUrls, setSignedUrls] = useState<{ [id: number]: string }>({})
@@ -32,11 +32,20 @@ export default function HomePage() {
     if (!user) {
       setFavourites([])
       setSignedUrls({})
+      setTab('aac') // Default to 'aac' if no user is logged in
       return
     }
     fetchFavourites()
     // eslint-disable-next-line
   }, [user])
+
+  useEffect(() => {
+    if (favourites.length > 0) {
+      setTab('favourites') // Default to 'favourites' if the user has favourites
+    } else {
+      setTab('aac') // Default to 'aac' otherwise
+    }
+  }, [favourites])
 
   async function fetchFavourites() {
     const { data } = await supabase
