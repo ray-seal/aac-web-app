@@ -58,11 +58,10 @@ export default function Parent() {
     fetchProfile()
   }, [user])
 
-  // Fetch favourites for this user
+  // Fetch favourites for this user, ordered by "order"
   useEffect(() => {
     if (!user) return
     fetchFavourites()
-    // eslint-disable-next-line
   }, [user])
 
   async function fetchFavourites() {
@@ -70,7 +69,7 @@ export default function Parent() {
       .from('favourites')
       .select('*')
       .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
+      .order('order', { ascending: true })
     setFavourites(data ?? [])
   }
 
@@ -125,9 +124,11 @@ export default function Parent() {
     const path = await uploadImage(uploadFile, user.id)
     setUploading(false)
     if (!path) return
+    // Find max order value for this user
+    const maxOrder = favourites.length > 0 ? Math.max(...favourites.map(f => f.order ?? 0)) : 0
     const { error } = await supabase
       .from('favourites')
-      .insert([{ user_id: user.id, image_url: path, label: uploadLabel, type: 'upload' }])
+      .insert([{ user_id: user.id, image_url: path, label: uploadLabel, type: 'upload', order: maxOrder + 1 }])
     if (!error) {
       setUploadLabel('')
       setUploadFile(null)
@@ -141,6 +142,7 @@ export default function Parent() {
   async function handleRemoveFavourite(favId: number) {
     await supabase.from('favourites').delete().eq('id', favId)
     setFavourites(favourites.filter(f => f.id !== favId))
+    fetchFavourites()
   }
 
   // Add AAC symbol to favourites
@@ -148,11 +150,41 @@ export default function Parent() {
     if (!user) return
     const exists = favourites.some(f => f.type === 'aac' && f.label === symbol.text)
     if (exists) return
+    // Find max order value for this user
+    const maxOrder = favourites.length > 0 ? Math.max(...favourites.map(f => f.order ?? 0)) : 0
     const { error } = await supabase
       .from('favourites')
-      .insert([{ user_id: user.id, image_url: symbol.imagePath, label: symbol.text, type: 'aac' }])
+      .insert([{ user_id: user.id, image_url: symbol.imagePath, label: symbol.text, type: 'aac', order: maxOrder + 1 }])
     if (!error) fetchFavourites()
     else if (error) setError(error.message)
+  }
+
+  // Rearrangement logic
+  async function moveFavourite(favId: number, direction: 'up' | 'down') {
+    const idx = favourites.findIndex(f => f.id === favId)
+    if (idx === -1) return
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1
+    if (targetIdx < 0 || targetIdx >= favourites.length) return
+
+    const fav = favourites[idx]
+    const targetFav = favourites[targetIdx]
+
+    // Swap their order values in DB
+    await supabase
+      .from('favourites')
+      .update({ order: targetFav.order })
+      .eq('id', fav.id)
+    await supabase
+      .from('favourites')
+      .update({ order: fav.order })
+      .eq('id', targetFav.id)
+
+    // Update local state for immediate UI feedback
+    const updated = [...favourites]
+    updated[idx] = targetFav
+    updated[targetIdx] = fav
+    setFavourites(updated)
+    fetchFavourites()
   }
 
   // PIN: Set PIN
@@ -389,7 +421,7 @@ export default function Parent() {
           {favourites.length === 0 && (
             <p className="col-span-full text-gray-600 text-center">(No favourites yet)</p>
           )}
-          {favourites.map((fav: any) => (
+          {favourites.map((fav: any, idx) => (
             <div key={fav.id} className="border rounded p-2 flex flex-col items-center bg-gray-50">
               <img
                 src={fav.type === 'aac'
@@ -400,6 +432,20 @@ export default function Parent() {
                 style={{ background: '#E0E7EF' }}
               />
               <div className="text-center text-xs font-medium mb-1">{fav.label}</div>
+              <div className="flex gap-1 mb-1">
+                <button
+                  disabled={idx === 0}
+                  onClick={() => moveFavourite(fav.id, 'up')}
+                  className="px-1 py-0 bg-blue-400 text-white rounded text-xs"
+                  title="Move up"
+                >↑</button>
+                <button
+                  disabled={idx === favourites.length - 1}
+                  onClick={() => moveFavourite(fav.id, 'down')}
+                  className="px-1 py-0 bg-blue-400 text-white rounded text-xs"
+                  title="Move down"
+                >↓</button>
+              </div>
               <button
                 onClick={() => handleRemoveFavourite(fav.id)}
                 className="px-2 py-1 bg-red-500 text-white rounded text-xs"
