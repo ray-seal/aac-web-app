@@ -6,7 +6,7 @@ import { getSignedImageUrl } from '../utils/uploadImage'
 import { AACGrid } from '../components/AACGrid'
 
 export default function HomePage() {
-  const [tab, setTab] = useState<'aac' | 'favourites' | null>(null)
+  const [tab, setTab] = useState<'aac' | 'favourites'>('aac')
   const [user, setUser] = useState<any>(null)
   const [favourites, setFavourites] = useState<any[]>([])
   const [signedUrls, setSignedUrls] = useState<{ [id: number]: string }>({})
@@ -32,20 +32,11 @@ export default function HomePage() {
     if (!user) {
       setFavourites([])
       setSignedUrls({})
-      setTab('aac') // Default to 'aac' if no user is logged in
       return
     }
     fetchFavourites()
     // eslint-disable-next-line
   }, [user])
-
-  useEffect(() => {
-    if (favourites.length > 0) {
-      setTab('favourites') // Default to 'favourites' if the user has favourites
-    } else {
-      setTab('aac') // Default to 'aac' otherwise
-    }
-  }, [favourites])
 
   async function fetchFavourites() {
     const { data } = await supabase
@@ -77,11 +68,14 @@ export default function HomePage() {
 
   // Handler for selecting a symbol from the AAC grid
   function handleSelectSymbol(symbol: AacSymbol) {
-    setSelectedSymbols([...selectedSymbols, symbol])
+    // Only add if not already selected (by id)
+    if (!selectedSymbols.some(s => s.id === symbol.id)) {
+      setSelectedSymbols([...selectedSymbols, symbol])
 
-    // Text-to-Speech for the pressed symbol
-    const utterance = new window.SpeechSynthesisUtterance(symbol.text)
-    window.speechSynthesis.speak(utterance)
+      // Text-to-Speech for the pressed symbol
+      const utterance = new window.SpeechSynthesisUtterance(symbol.text)
+      window.speechSynthesis.speak(utterance)
+    }
   }
 
   // Handler for selecting a favourite (convert to AacSymbol)
@@ -95,7 +89,14 @@ export default function HomePage() {
       imagePath,
       category: fav.type ?? 'favourite'
     }
-    setSelectedSymbols([...selectedSymbols, symbol])
+    // Only add if not already selected (by id)
+    if (!selectedSymbols.some(s => s.id === symbol.id)) {
+      setSelectedSymbols([...selectedSymbols, symbol])
+
+      // Text-to-Speech for the pressed symbol
+      const utterance = new window.SpeechSynthesisUtterance(symbol.text)
+      window.speechSynthesis.speak(utterance)
+    }
   }
 
   // Handler for speaking the sentence
