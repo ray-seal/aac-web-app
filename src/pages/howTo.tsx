@@ -14,7 +14,7 @@ export const howToPage: React.FC = () => {
         Speakly How To
       </h1>
       <div>
-        <p>Welcome to Speakly. The voice given to those who cannot speak for themselves.<br>
+        <p>Welcome to Speakly. The voice given to those who cannot speak for themselves.
         </p>
           <ul>
             <li><strong>Home Page</strong> — <img src="images/SShome.jpeg" width=10%><figcaption>On the homepage select the image you want to say and it will be added to the communication
