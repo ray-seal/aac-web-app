@@ -35,17 +35,24 @@ export default function HomePage() {
       return
     }
     fetchFavourites()
-    // eslint-disable-next-line
   }, [user])
 
   async function fetchFavourites() {
+    // Order by 'order' if present, otherwise fallback to created_at
     const { data } = await supabase
       .from('favourites')
       .select('*')
       .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
+      .order('order', { ascending: true })
     setFavourites(data ?? [])
   }
+
+  // If user has favourites, show favourites tab by default
+  useEffect(() => {
+    if (user && favourites.length > 0 && tab !== 'favourites') {
+      setTab('favourites')
+    }
+  }, [favourites, user])
 
   // Load signed URLs for uploads
   useEffect(() => {
