@@ -348,7 +348,7 @@ export default function Parent() {
           >
             Back
           </button>
-          <button onClick{() => navigate('.../how-to')} 
+          <button onClick={() => navigate('/how-to')} 
           className="bg-gray-400 text-white px-4 py-2 rounded">How To Guide</button>
         
           <h2 className="text-2xl font-bold">Welcome, Parent!</h2>
