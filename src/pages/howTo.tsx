@@ -10,12 +10,16 @@ export const howToPage: React.FC = () => {
         ← Back to app
       </button>
       {/* Edit from here down */}
-      <h1 className="text-3xl sm:text-4xl font-bold mb-8 text-center text-accent">
+      <h1>
         Speakly How To
       </h1>
-      <div className="space-y-2">
-          <ul className="list-disc list-inside space-y-1">
-            <li><strong>High Mobility</strong> — Movement is tactical and cinematic.</li>
+      <div>
+        <p>Welcome to Speakly. The voice given to those who cannot speak for themselves.<br>
+        </p>
+          <ul>
+            <li><strong>Home Page</strong> — <img src="images/SShome.jpeg" width=10%><figcaption>On the homepage select the image you want to say and it will be added to the communication
+               panel at the top of the screen.</figcaption>
+              <img src="images/SSspeak.jpeg" width=10%><figcaption>Press "speak" after adding to the communication panel to say your request out loud.</figcaption></li>
             <li><strong>Power Fantasy</strong> — Abilities reshape encounters.</li>
             <li><strong>Modularity</strong> — Customize frames, weapons, and mods.</li>
             <li><strong>Swarm Combat</strong> — Numerous but dangerous enemies.</li>
