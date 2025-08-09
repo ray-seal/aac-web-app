@@ -337,6 +337,8 @@ export default function Parent() {
     )
   }
 
+// ... [everything above unchanged] ...
+
   // Main Parent content (unlocked)
   return (
     <div className="max-w-4xl mx-auto mt-10 p-4 bg-white rounded shadow">
@@ -364,7 +366,9 @@ export default function Parent() {
         </button>
       </div>
       <p className="mb-4">You are signed in as <span className="font-mono">{user.email}</span></p>
-
+    </div>
+  )
+}
       {/* Upload new image */}
       <div className="mb-8">
         <h3 className="font-bold mb-2">Upload new favourite</h3>
