@@ -9,7 +9,7 @@ function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/parent" element={<Parent />} />
-					<Route path="/pages" element={<howToPage />} />
+					<Route path="/how-to" element={<howToPage />} />
         {/* Catch-all must go last */}
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
