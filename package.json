@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build && workbox generateSW workbox-config.js",
+    "build": "tsc -b && vite build && npx workbox generateSW workbox-config.js",
     "type-check": "tsc --noEmit",
     "lint": "eslint . --ext .ts,.tsx",
     "format": "prettier --check .",
@@ -38,6 +38,7 @@
     "tailwindcss": "^3.4.3",
     "typescript": "^5.5.3",
     "vite": "^5.4.1",
-    "vite-plugin-pwa": "^0.16.5"
+    "vite-plugin-pwa": "^0.16.5",
+    "workbox-cli": "^7.0.0"
   }
 }
