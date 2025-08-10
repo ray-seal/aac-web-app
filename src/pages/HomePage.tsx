@@ -5,6 +5,26 @@ import { supabase } from '../supabaseClient'
 import { getSignedImageUrl } from '../utils/uploadImage'
 import { AACGrid } from '../components/AACGrid'
 
+const FAVOURITES_KEY = 'aac_favourites'
+
+function isOnline() {
+  return typeof navigator !== 'undefined' ? navigator.onLine : true
+}
+
+// Utility: track offline changes for later sync
+const OFFLINE_QUEUE_KEY = 'aac_fav_queue'
+function addToOfflineQueue(action: any) {
+  const queue = JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]')
+  queue.push(action)
+  localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue))
+}
+function clearOfflineQueue() {
+  localStorage.removeItem(OFFLINE_QUEUE_KEY)
+}
+function getOfflineQueue() {
+  return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]')
+}
+
 export default function HomePage() {
   const [tab, setTab] = useState<'aac' | 'favourites'>('aac')
   const [user, setUser] = useState<any>(null)
@@ -27,7 +47,7 @@ export default function HomePage() {
     }
   }, [])
 
-  // Fetch favourites for this user
+  // Fetch favourites for this user, offline support
   useEffect(() => {
     if (!user) {
       setFavourites([])
@@ -38,13 +58,19 @@ export default function HomePage() {
   }, [user])
 
   async function fetchFavourites() {
-    // Order by 'order' if present, otherwise fallback to created_at
-    const { data } = await supabase
-      .from('favourites')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('order', { ascending: true })
-    setFavourites(data ?? [])
+    if (isOnline()) {
+      const { data } = await supabase
+        .from('favourites')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('order', { ascending: true })
+      setFavourites(data ?? [])
+      localStorage.setItem(FAVOURITES_KEY, JSON.stringify(data ?? []))
+    } else {
+      // Offline: load from localStorage
+      const offlineFavs = localStorage.getItem(FAVOURITES_KEY)
+      setFavourites(offlineFavs ? JSON.parse(offlineFavs) : [])
+    }
   }
 
   // If user has favourites, show favourites tab by default
@@ -120,26 +146,176 @@ export default function HomePage() {
     setSelectedSymbols([])
   }
 
+  // Add to favourites (offline and sync support)
+  async function handleAddFavourite(symbol: AacSymbol) {
+    if (!user) return
+    const exists = favourites.some(f => f.type === 'aac' && f.label === symbol.text)
+    if (exists) return
+    const maxOrder = favourites.length > 0 ? Math.max(...favourites.map(f => f.order ?? 0)) : 0
+
+    if (!isOnline()) {
+      // Offline: fake id, queue for sync
+      const newFav = {
+        id: Date.now(),
+        user_id: user.id,
+        image_url: symbol.imagePath,
+        label: symbol.text,
+        type: 'aac',
+        order: maxOrder + 1
+      }
+      const newFavs = [...favourites, newFav]
+      setFavourites(newFavs)
+      localStorage.setItem(FAVOURITES_KEY, JSON.stringify(newFavs))
+      addToOfflineQueue({ type: 'add', data: newFav })
+      return
+    }
+
+    const { error } = await supabase
+      .from('favourites')
+      .insert([{ user_id: user.id, image_url: symbol.imagePath, label: symbol.text, type: 'aac', order: maxOrder + 1 }])
+    if (!error) fetchFavourites()
+    else alert(error.message)
+  }
+
+  // Remove favourite (offline and sync support)
+  async function handleRemoveFavourite(fav: any) {
+    if (!isOnline()) {
+      const newFavs = favourites.filter(f => f.id !== fav.id)
+      setFavourites(newFavs)
+      localStorage.setItem(FAVOURITES_KEY, JSON.stringify(newFavs))
+      addToOfflineQueue({ type: 'remove', id: fav.id })
+      return
+    }
+    await supabase.from('favourites').delete().eq('id', fav.id)
+    fetchFavourites()
+  }
+
+  // Move favourite up/down (offline and sync support)
+  async function handleMoveFavourite(favId: number, direction: 'up' | 'down') {
+    const idx = favourites.findIndex(f => f.id === favId)
+    if (idx === -1) return
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1
+    if (targetIdx < 0 || targetIdx >= favourites.length) return
+
+    const fav = favourites[idx]
+    const targetFav = favourites[targetIdx]
+    const updated = [...favourites]
+    updated[idx] = targetFav
+    updated[targetIdx] = fav
+    [updated[idx].order, updated[targetIdx].order] = [updated[targetIdx].order, updated[idx].order]
+
+    if (!isOnline()) {
+      setFavourites(updated)
+      localStorage.setItem(FAVOURITES_KEY, JSON.stringify(updated))
+      addToOfflineQueue({ type: 'move', id: fav.id, direction })
+      return
+    }
+
+    await supabase
+      .from('favourites')
+      .update({ order: targetFav.order })
+      .eq('id', fav.id)
+    await supabase
+      .from('favourites')
+      .update({ order: fav.order })
+      .eq('id', targetFav.id)
+    fetchFavourites()
+  }
+
+  // Sync local offline changes to Supabase when back online
+  useEffect(() => {
+    if (!user) return
+    function syncOfflineQueue() {
+      if (!isOnline()) return
+      const queue = getOfflineQueue()
+      if (!queue.length) return
+
+      // For each queued action, perform it online
+      Promise.all(queue.map(async action => {
+        if (action.type === 'add') {
+          // Remove fake id before insert
+          const { id, ...toInsert } = action.data
+          await supabase
+            .from('favourites')
+            .insert([{ ...toInsert }])
+        } else if (action.type === 'remove') {
+          await supabase
+            .from('favourites')
+            .delete()
+            .eq('id', action.id)
+        } else if (action.type === 'move') {
+          // Find fav and target, swap order
+          const favs = [...favourites]
+          const idx = favs.findIndex(f => f.id === action.id)
+          const targetIdx = action.direction === 'up' ? idx - 1 : idx + 1
+          if (idx === -1 || targetIdx < 0 || targetIdx >= favs.length) return
+          const fav = favs[idx]
+          const targetFav = favs[targetIdx]
+          await supabase
+            .from('favourites')
+            .update({ order: targetFav.order })
+            .eq('id', fav.id)
+          await supabase
+            .from('favourites')
+            .update({ order: fav.order })
+            .eq('id', targetFav.id)
+        }
+      })).then(() => {
+        clearOfflineQueue()
+        fetchFavourites()
+      })
+    }
+
+    window.addEventListener('online', syncOfflineQueue)
+    // Also sync immediately if online on mount
+    if (isOnline()) syncOfflineQueue()
+    return () => window.removeEventListener('online', syncOfflineQueue)
+  }, [user, favourites])
+
   // Favourites grid: clicking adds to communication box just like AAC symbols
   function renderFavouritesGrid() {
     if (!favourites.length)
       return <div className="p-4 text-center text-gray-500">No favourites yet.</div>
     return (
       <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4">
-        {favourites.map((fav: any) => (
-          <button
+        {favourites.map((fav: any, idx) => (
+          <div
             key={fav.id}
-            className="border rounded p-2 flex flex-col items-center bg-gray-50 focus:outline-none"
-            onClick={() => handleSelectFavourite(fav)}
-            type="button"
+            className="border rounded p-2 flex flex-col items-center bg-gray-50"
           >
-            <img
-              src={fav.type === 'aac' ? fav.image_url : (signedUrls[fav.id] || '')}
-              alt={fav.label}
-              className="w-16 h-16 object-cover rounded mb-2"
-            />
-            <div className="text-center text-xs font-medium mb-1">{fav.label}</div>
-          </button>
+            <button
+              className="w-full flex flex-col items-center focus:outline-none"
+              onClick={() => handleSelectFavourite(fav)}
+              type="button"
+            >
+              <img
+                src={fav.type === 'aac' ? fav.image_url : (signedUrls[fav.id] || '')}
+                alt={fav.label}
+                className="w-16 h-16 object-cover rounded mb-2"
+              />
+              <div className="text-center text-xs font-medium mb-1">{fav.label}</div>
+            </button>
+            <div className="flex gap-1 mt-2">
+              <button
+                disabled={idx === 0}
+                onClick={() => handleMoveFavourite(fav.id, 'up')}
+                className="px-1 py-0 bg-blue-400 text-white rounded text-xs"
+                title="Move up"
+              >↑</button>
+              <button
+                disabled={idx === favourites.length - 1}
+                onClick={() => handleMoveFavourite(fav.id, 'down')}
+                className="px-1 py-0 bg-blue-400 text-white rounded text-xs"
+                title="Move down"
+              >↓</button>
+              <button
+                onClick={() => handleRemoveFavourite(fav)}
+                className="px-2 py-1 bg-red-500 text-white rounded text-xs ml-1"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
         ))}
       </div>
     )
@@ -198,7 +374,7 @@ export default function HomePage() {
       {tab === 'aac' && (
         <AACGrid
           items={aacSymbols}
-          onSelect={handleSelectSymbol}
+          onSelect={handleAddFavourite}
         />
       )}
       {tab === 'favourites' && user && renderFavouritesGrid()}
