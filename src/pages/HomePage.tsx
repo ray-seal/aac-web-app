@@ -165,6 +165,7 @@ export default function HomePage() {
     fetchFavourites()
   }
 
+  // FIX: Prevent duplicate favourites when syncing offline queue
   useEffect(() => {
     if (!user) return
     function syncOfflineQueue() {
@@ -175,9 +176,19 @@ export default function HomePage() {
       Promise.all(queue.map(async action => {
         if (action.type === 'add') {
           const { id, ...toInsert } = action.data
-          await supabase
+          // Check for duplicate before inserting (label, type, user_id)
+          const { data: existing } = await supabase
             .from('favourites')
-            .insert([{ ...toInsert }])
+            .select('*')
+            .eq('user_id', toInsert.user_id)
+            .eq('label', toInsert.label)
+            .eq('type', toInsert.type)
+            .single()
+          if (!existing) {
+            await supabase
+              .from('favourites')
+              .insert([{ ...toInsert }])
+          }
         } else if (action.type === 'remove') {
           await supabase
             .from('favourites')
