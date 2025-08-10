@@ -19,12 +19,12 @@ const HowToPage: React.FC = () => {
         <ul>
           <li>
             <strong>Home Page</strong> — 
-            <img src="images/SShome.jpeg" style={{ width: '10%' }} alt="Home Page" />
+            <img src="images/SShome.jpeg" style={{ width: '25%' }} alt="Home Page" />
             <figcaption>
               On the homepage select the image you want to say and it will be added to the communication
               panel at the top of the screen.
             </figcaption>
-            <img src="images/SSspeak.jpeg" style={{ width: '10%' }} alt="Speak Feature" />
+            <img src="images/SSspeak.jpeg" style={{ width: '25%' }} alt="Speak Feature" />
             <figcaption>
               Press "speak" after adding to the communication panel to say your request out loud.
             </figcaption>
