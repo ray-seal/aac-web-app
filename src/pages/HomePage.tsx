@@ -133,18 +133,6 @@ export default function HomePage() {
     setSelectedSymbols([])
   }
 
-  async function handleRemoveFavourite(fav: any) {
-    if (!isOnline()) {
-      const newFavs = favourites.filter(f => f.id !== fav.id)
-      setFavourites(newFavs)
-      localStorage.setItem(FAVOURITES_KEY, JSON.stringify(newFavs))
-      addToOfflineQueue({ type: 'remove', id: fav.id })
-      return
-    }
-    await supabase.from('favourites').delete().eq('id', fav.id)
-    fetchFavourites()
-  }
-
   // FIX: Prevent duplicate favourites when syncing offline queue
   useEffect(() => {
     if (!user) return
@@ -205,7 +193,7 @@ export default function HomePage() {
               />
               <div className="text-center text-xs font-medium mb-1">{fav.label}</div>
             </button>
-            {/* Remove button removed as per user request */}
+            {/* Remove button has been removed */}
           </div>
         ))}
       </div>
