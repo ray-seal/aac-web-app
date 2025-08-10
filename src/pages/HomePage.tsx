@@ -112,6 +112,15 @@ export default function HomePage() {
     }
   }
 
+  // NEW: This is now used for AACGrid selection instead of handleAddFavourite
+  function handleSelectSymbol(symbol: AacSymbol) {
+    if (!selectedSymbols.some(s => s.id === symbol.id)) {
+      setSelectedSymbols([...selectedSymbols, symbol])
+      const utterance = new window.SpeechSynthesisUtterance(symbol.text)
+      window.speechSynthesis.speak(utterance)
+    }
+  }
+
   function handleSpeakSentence() {
     if (!selectedSymbols.length) return
     const utterance = new window.SpeechSynthesisUtterance(
@@ -124,6 +133,7 @@ export default function HomePage() {
     setSelectedSymbols([])
   }
 
+  // Favourites management (used only in the favourites tab, not for AAC symbol selection)
   async function handleAddFavourite(symbol: AacSymbol) {
     if (!user) return
     const exists = favourites.some(f => f.type === 'aac' && f.label === symbol.text)
@@ -290,7 +300,8 @@ export default function HomePage() {
       {tab === 'aac' && (
         <AACGrid
           items={aacSymbols}
-          onSelect={handleAddFavourite}
+          // Only add to communication panel and speak, not to favourites
+          onSelect={handleSelectSymbol}
         />
       )}
       {tab === 'favourites' && user && renderFavouritesGrid()}
