@@ -29,17 +29,17 @@ const HowToPage: React.FC = () => {
             </figcaption>
           </li>
 							<li>
-								<img src="images/SSparent.jpeg" style={{ width: 25% }} alt="Parent Tab" />
+								<img src="images/SSparent.jpeg" style={{ width: '25%' }} alt="Parent Tab" />
 							<figcaption>Click the parent tab in the top right corner to create a free account.
 							</figcaption>
 </li>
 <li>
-<img src="images/SSsignup.jpeg" style={{ width: 25% }} alt="Sign Up" />
+<img src="images/SSsignup.jpeg" style={{ width: '25%' }} alt="Sign Up" />
 <figcaption>
 Simply type in your email address and choose a password to be taken to.
 </figcaption></li>
 <li>
-<img src="images/SSsetpin" style={{ width: 25% }} alt="Set Pin" />
+<img src="images/SSsetpin" style={{ width: '25%' }} alt="Set Pin" />
 <figcaption>
 Here you can choose your pin number, you will need to keep this safe so you can access the parent tab in future.
 </figcaption>
