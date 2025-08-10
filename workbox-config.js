@@ -4,7 +4,6 @@ module.exports = {
     '**/*.{html,js,css,png,jpg,json,svg}'
   ],
   swDest: 'dist/sw.js',
-  swSrc: undefined, // omit or comment this line if using generateSW, include if using injectManifest
   runtimeCaching: [{
     urlPattern: /\.(?:png|jpg|jpeg|svg|gif)$/,
     handler: 'CacheFirst',
@@ -16,5 +15,4 @@ module.exports = {
       },
     },
   }],
-  // Add other Workbox options as needed
 };
