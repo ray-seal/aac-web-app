@@ -18,7 +18,6 @@ const HowToPage: React.FC = () => {
         </p>
         <ul>
           <li>
-            <strong>Home Page</strong> — 
             <img src="images/SShome.jpeg" style={{ width: '25%' }} alt="Home Page" />
             <figcaption>
               On the homepage select the image you want to say and it will be added to the communication
@@ -29,6 +28,23 @@ const HowToPage: React.FC = () => {
               Press "speak" after adding to the communication panel to say your request out loud.
             </figcaption>
           </li>
+							<li>
+								<img src="images/SSparent.jpeg" style={{ width: 25% }} alt="Parent Tab" />
+							<figcaption>Click the parent tab in the top right corner to create a free account.
+							</figcaption>
+</li>
+<li>
+<img src="images/SSsignup.jpeg" style={{ width: 25% }} alt="Sign Up" />
+<figcaption>
+Simply type in your email address and choose a password to be taken to.
+</figcaption>
+<li>
+<img src="images/SSsetpin" style={{ width: 25% }} alt="Set Pin" />
+<figcaption>
+Here you can choose your pin number, you will need to keep this safe so you can access the parent tab in future.
+</figcaption>
+</li>
+
         </ul>
       </div>
     </main>
