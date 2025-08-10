@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && workbox generateSW workbox-config.js",
     "type-check": "tsc --noEmit",
     "lint": "eslint . --ext .ts,.tsx",
     "format": "prettier --check .",
@@ -40,7 +40,4 @@
     "vite": "^5.4.1",
     "vite-plugin-pwa": "^0.16.5"
   }
-}
-"scripts": {
-  "build": "vite build && workbox generateSW workbox-config.js"
 }
