@@ -39,7 +39,7 @@ const HowToPage: React.FC = () => {
 Simply type in your email address and choose a password to be taken to.
 </figcaption></li>
 <li>
-<img src="images/SSsetpin.jpeg" style={{ width: '25%' }} alt="Set Pin" />
+<img src="images/SSsetpin.png" style={{ width: '25%' }} alt="Set Pin" />
 <figcaption>
 Here you can choose your pin number, you will need to keep this safe so you can access the parent tab in future.
 </figcaption>
