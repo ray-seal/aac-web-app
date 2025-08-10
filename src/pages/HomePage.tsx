@@ -112,7 +112,7 @@ export default function HomePage() {
     }
   }
 
-  // NEW: This is now used for AACGrid selection instead of handleAddFavourite
+  // Used for AACGrid selection instead of handleAddFavourite
   function handleSelectSymbol(symbol: AacSymbol) {
     if (!selectedSymbols.some(s => s.id === symbol.id)) {
       setSelectedSymbols([...selectedSymbols, symbol])
@@ -131,36 +131,6 @@ export default function HomePage() {
 
   function handleClearSentence() {
     setSelectedSymbols([])
-  }
-
-  // Favourites management (used only in the favourites tab, not for AAC symbol selection)
-  async function handleAddFavourite(symbol: AacSymbol) {
-    if (!user) return
-    const exists = favourites.some(f => f.type === 'aac' && f.label === symbol.text)
-    if (exists) return
-    const maxOrder = favourites.length > 0 ? Math.max(...favourites.map(f => f.order ?? 0)) : 0
-
-    if (!isOnline()) {
-      const newFav = {
-        id: Date.now(),
-        user_id: user.id,
-        image_url: symbol.imagePath,
-        label: symbol.text,
-        type: 'aac',
-        order: maxOrder + 1
-      }
-      const newFavs = [...favourites, newFav]
-      setFavourites(newFavs)
-      localStorage.setItem(FAVOURITES_KEY, JSON.stringify(newFavs))
-      addToOfflineQueue({ type: 'add', data: newFav })
-      return
-    }
-
-    const { error } = await supabase
-      .from('favourites')
-      .insert([{ user_id: user.id, image_url: symbol.imagePath, label: symbol.text, type: 'aac', order: maxOrder + 1 }])
-    if (!error) fetchFavourites()
-    else alert(error.message)
   }
 
   async function handleRemoveFavourite(fav: any) {
