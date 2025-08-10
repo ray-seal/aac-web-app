@@ -165,37 +165,6 @@ export default function HomePage() {
     fetchFavourites()
   }
 
-  async function handleMoveFavourite(favId: number, direction: 'up' | 'down') {
-    const idx = favourites.findIndex(f => f.id === favId)
-    if (idx === -1) return
-    const targetIdx = direction === 'up' ? idx - 1 : idx + 1
-    if (targetIdx < 0 || targetIdx >= favourites.length) return
-
-    const fav = favourites[idx]
-    const targetFav = favourites[targetIdx]
-    const updated = [...favourites]
-    updated[idx] = targetFav
-    updated[targetIdx] = fav
-    [updated[idx].order, updated[targetIdx].order] = [updated[targetIdx].order, updated[idx].order]
-
-    if (!isOnline()) {
-      setFavourites(updated)
-      localStorage.setItem(FAVOURITES_KEY, JSON.stringify(updated))
-      addToOfflineQueue({ type: 'move', id: fav.id, direction })
-      return
-    }
-
-    await supabase
-      .from('favourites')
-      .update({ order: targetFav.order })
-      .eq('id', fav.id)
-    await supabase
-      .from('favourites')
-      .update({ order: fav.order })
-      .eq('id', targetFav.id)
-    fetchFavourites()
-  }
-
   useEffect(() => {
     if (!user) return
     function syncOfflineQueue() {
@@ -214,21 +183,6 @@ export default function HomePage() {
             .from('favourites')
             .delete()
             .eq('id', action.id)
-        } else if (action.type === 'move') {
-          const favs = [...favourites]
-          const idx = favs.findIndex(f => f.id === action.id)
-          const targetIdx = action.direction === 'up' ? idx - 1 : idx + 1
-          if (idx === -1 || targetIdx < 0 || targetIdx >= favs.length) return
-          const fav = favs[idx]
-          const targetFav = favs[targetIdx]
-          await supabase
-            .from('favourites')
-            .update({ order: targetFav.order })
-            .eq('id', fav.id)
-          await supabase
-            .from('favourites')
-            .update({ order: fav.order })
-            .eq('id', targetFav.id)
         }
       })).then(() => {
         clearOfflineQueue()
@@ -246,7 +200,7 @@ export default function HomePage() {
       return <div className="p-4 text-center text-gray-500">No favourites yet.</div>
     return (
       <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4">
-        {favourites.map((fav: any, idx) => (
+        {favourites.map((fav: any) => (
           <div key={fav.id} className="border rounded p-2 flex flex-col items-center bg-gray-50">
             <button
               className="w-full flex flex-col items-center focus:outline-none"
@@ -260,26 +214,12 @@ export default function HomePage() {
               />
               <div className="text-center text-xs font-medium mb-1">{fav.label}</div>
             </button>
-            <div className="flex gap-1 mt-2">
-              <button
-                disabled={idx === 0}
-                onClick={() => handleMoveFavourite(fav.id, 'up')}
-                className="px-1 py-0 bg-blue-400 text-white rounded text-xs"
-                title="Move up"
-              >↑</button>
-              <button
-                disabled={idx === favourites.length - 1}
-                onClick={() => handleMoveFavourite(fav.id, 'down')}
-                className="px-1 py-0 bg-blue-400 text-white rounded text-xs"
-                title="Move down"
-              >↓</button>
-              <button
-                onClick={() => handleRemoveFavourite(fav)}
-                className="px-2 py-1 bg-red-500 text-white rounded text-xs ml-1"
-              >
-                Remove
-              </button>
-            </div>
+            <button
+              onClick={() => handleRemoveFavourite(fav)}
+              className="px-2 py-1 bg-red-500 text-white rounded text-xs mt-2"
+            >
+              Remove
+            </button>
           </div>
         ))}
       </div>
