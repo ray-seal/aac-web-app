@@ -16,11 +16,6 @@ type OfflineAction =
   | { type: 'remove'; id: number }
   | { type: 'move'; id: number; direction: 'up' | 'down' }
 
-function addToOfflineQueue(action: OfflineAction) {
-  const queue: OfflineAction[] = JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]')
-  queue.push(action)
-  localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue))
-}
 function clearOfflineQueue() {
   localStorage.removeItem(OFFLINE_QUEUE_KEY)
 }
