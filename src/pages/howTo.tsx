@@ -36,7 +36,7 @@ const HowToPage: React.FC = () => {
 <li>
 <img src="images/SSsignup.jpeg" style={{ width: '25%' }} alt="Sign Up" />
 <figcaption>
-Simply type in your email address and choose a password to be taken to.
+Simply type in your email address and choose a password to be taken to the set pin page.
 </figcaption></li>
 <li>
 <img src="images/SSsetpin.png" style={{ width: '25%' }} alt="Set Pin" />
@@ -44,7 +44,30 @@ Simply type in your email address and choose a password to be taken to.
 Here you can choose your pin number, you will need to keep this safe so you can access the parent tab in future.
 </figcaption>
 </li>
-
+<li>
+<img src="images/SSupload.jpeg" style={{ width: '25%' }} alt="Upload" />
+<figcaption>
+Once you have created an account you can upload your own images to use. Whatever you type in the 'label' box is what will be said when 'speak' button is pressed. 
+</figcaption>
+</li>
+<li>
+<img src="images/SSaddtoF.jpeg" style={{ width: '25%' }} alt="Add to Favourites" />
+<figcaption>
+In your parent tab you will also notice the Add to Favourites option. Selecting this will add to your favourites list at the bottom of the page.
+</figcaption>
+</li>
+<li>
+<img src="images/SSrearrange.jpeg" style={{ width: '25%' }} alt="Rearrange" />
+<figcaption>
+Once you have added to your favourites you can use the up and down arrows to rearrange them, the order you set them is the order they will appear on your main page.
+</figcaption>
+</li>
+<li>
+<img src="images/SSfavourites.jpeg" style={{ width: '25%' }}alt="Favourites" />
+<figcaption>
+Now your main screen should load automatically to your favourites and you are ready to start using the app.
+</figcaption>
+</li>
         </ul>
       </div>
     </main>
