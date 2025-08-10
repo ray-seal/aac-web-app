@@ -29,11 +29,6 @@ const HowToPage: React.FC = () => {
               Press "speak" after adding to the communication panel to say your request out loud.
             </figcaption>
           </li>
-          {/* Remove or edit unrelated items below as needed */}
-          <li><strong>Power Fantasy</strong> — Abilities reshape encounters.</li>
-          <li><strong>Modularity</strong> — Customize frames, weapons, and mods.</li>
-          <li><strong>Swarm Combat</strong> — Numerous but dangerous enemies.</li>
-          <li><strong>Narrative Progression</strong> — Story and upgrades matter.</li>
         </ul>
       </div>
     </main>
