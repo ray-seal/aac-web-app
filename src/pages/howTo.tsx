@@ -37,7 +37,7 @@ const HowToPage: React.FC = () => {
 <img src="images/SSsignup.jpeg" style={{ width: 25% }} alt="Sign Up" />
 <figcaption>
 Simply type in your email address and choose a password to be taken to.
-</figcaption>
+</figcaption></li>
 <li>
 <img src="images/SSsetpin" style={{ width: 25% }} alt="Set Pin" />
 <figcaption>
