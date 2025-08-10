@@ -33,13 +33,13 @@ Then click 'Add to Home Screen' and this will download the app.
 </li>
 <h2><b>Android</b></h2>
 <li>
-<img src="images/SSandroiddots.jpg" style={{ width: '25%' }} />
+<img src="images/SSandroiddots.jpg" style={{ width: '50%' }} />
 <figcaption>
 Click the three dots in the top right corner.
 </figcaption>
 </li>
 <li>
-<img src="images/SSandroidaddtohome.jpg" style={{ width: '25%' }} />
+<img src="images/SSandroidaddtohome.jpg" style={{ width: '50%' }} />
 <figcaption>
 Click 'Add to Home Screen' and this will download the app.
 </figcaption>
