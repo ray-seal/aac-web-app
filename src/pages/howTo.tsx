@@ -17,6 +17,34 @@ const HowToPage: React.FC = () => {
           Welcome to Speakly. The voice given to those who cannot speak for themselves.
         </p>
         <ul>
+<h1><b>Downloading the app</b></h1>
+<h2><b>Apple</b></h2>
+<li>
+<img src="images/SSappledots.jpeg" style={{ width: '25%' }} />
+<figcaption>
+On iPhone or iPad click this symbol.
+</figcaption>
+</li>
+<li>
+<img src="images/SSappleaddtohome.jpeg" style={{ width: '25%' }} />
+<figcaption>
+Then click 'Add to Home Screen' and this will download the app.
+</figcaption>
+</li>
+<h2><b>Android</b></h2>
+<li>
+<img src="images/SSandroiddots.jpg" style={{ width: '25%' }} />
+<figcaption>
+Click the three dots in the top right corner.
+</figcaption>
+</li>
+<li>
+<img src="images/SSandroidaddtohome.jpg" style={{ width: '25%' }} />
+<figcaption>
+Click 'Add to Home Screen' and this will download the app.
+</figcaption>
+</li>
+<p className="text-center">By adding the app to the home screen of your childs device it will download and no longer give access to the rest of the internet, taking away the worry that you will need your child to have internet access to use this app. The device will however still need an internet connection to work.</p> 
           <li>
             <img src="images/SShome.jpeg" style={{ width: '25%' }} alt="Home Page" />
             <figcaption>
