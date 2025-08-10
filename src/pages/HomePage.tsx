@@ -205,12 +205,7 @@ export default function HomePage() {
               />
               <div className="text-center text-xs font-medium mb-1">{fav.label}</div>
             </button>
-            <button
-              onClick={() => handleRemoveFavourite(fav)}
-              className="px-2 py-1 bg-red-500 text-white rounded text-xs mt-2"
-            >
-              Remove
-            </button>
+            {/* Remove button removed as per user request */}
           </div>
         ))}
       </div>
