@@ -9,11 +9,11 @@ const HowToPage: React.FC = () => {
         ← Back to app
       </button>
       {/* Edit from here down */}
-      <h1>
-        Speakly How To
+      <h1 text-align: center>
+        <b>Speakly How To</b>
       </h1>
       <div>
-        <p>
+        <p text-align: center>
           Welcome to Speakly. The voice given to those who cannot speak for themselves.
         </p>
         <ul>
