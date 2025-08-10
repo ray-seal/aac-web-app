@@ -132,49 +132,6 @@ export default function HomePage() {
     setSelectedSymbols([])
   }
 
-  // Add to favourites, works offline by queueing
-  async function handleAddFavourite(symbol: AacSymbol) {
-    if (!user) return
-    const exists = favourites.some(f => f.type === 'aac' && f.label === symbol.text)
-    if (exists) return
-    const maxOrder = favourites.length > 0 ? Math.max(...favourites.map(f => f.order ?? 0)) : 0
-
-    if (!isOnline()) {
-      const newFav = {
-        id: Date.now(),
-        user_id: user.id,
-        image_url: symbol.imagePath,
-        label: symbol.text,
-        type: 'aac',
-        order: maxOrder + 1
-      }
-      const newFavs = [...favourites, newFav]
-      setFavourites(newFavs)
-      localStorage.setItem(FAVOURITES_KEY, JSON.stringify(newFavs))
-      addToOfflineQueue({ type: 'add', data: newFav })
-      return
-    }
-
-    const { error } = await supabase
-      .from('favourites')
-      .insert([{ user_id: user.id, image_url: symbol.imagePath, label: symbol.text, type: 'aac', order: maxOrder + 1 }])
-    if (!error) fetchFavourites()
-    else alert(error.message)
-  }
-
-  // Remove from favourites, works offline by queueing
-  async function handleRemoveFavourite(fav: any) {
-    if (!isOnline()) {
-      const newFavs = favourites.filter(f => f.id !== fav.id)
-      setFavourites(newFavs)
-      localStorage.setItem(FAVOURITES_KEY, JSON.stringify(newFavs))
-      addToOfflineQueue({ type: 'remove', id: fav.id })
-      return
-    }
-    await supabase.from('favourites').delete().eq('id', fav.id)
-    fetchFavourites()
-  }
-
   // FIX: Prevent duplicate favourites when syncing offline queue
   useEffect(() => {
     if (!user) return
@@ -216,7 +173,6 @@ export default function HomePage() {
     return () => window.removeEventListener('online', syncOfflineQueue)
   }, [user, favourites])
 
-  // Favourites grid, remove button available only if offline removal is desired (example: parent page could use it)
   function renderFavouritesGrid() {
     if (!favourites.length)
       return <div className="p-4 text-center text-gray-500">No favourites yet.</div>
@@ -236,14 +192,7 @@ export default function HomePage() {
               />
               <div className="text-center text-xs font-medium mb-1">{fav.label}</div>
             </button>
-            {/* If you want to allow removal in this tab, uncomment below:
-            <button
-              onClick={() => handleRemoveFavourite(fav)}
-              className="px-2 py-1 bg-red-500 text-white rounded text-xs mt-2"
-            >
-              Remove
-            </button>
-            */}
+            {/* Remove button is intentionally omitted */}
           </div>
         ))}
       </div>
@@ -303,7 +252,6 @@ export default function HomePage() {
       {tab === 'aac' && (
         <AACGrid
           items={aacSymbols}
-          // Only add to communication panel and speak, not to favourites
           onSelect={handleSelectSymbol}
         />
       )}
