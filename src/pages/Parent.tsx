@@ -4,6 +4,14 @@ import { aacSymbols, AacSymbol } from '../data/aac-symbols'
 import { uploadImage, getSignedImageUrl } from '../utils/uploadImage'
 import { useNavigate } from 'react-router-dom'
 
+// Use localStorage keys for offline cache
+const FAVOURITES_KEY = 'aac_favourites'
+const PIN_KEY = 'aac_parent_pin'
+
+function isOnline() {
+  return typeof navigator !== 'undefined' ? navigator.onLine : true
+}
+
 export default function Parent() {
   // Auth and user state
   const [user, setUser] = useState<any>(null)
@@ -31,7 +39,7 @@ export default function Parent() {
 
   const navigate = useNavigate()
 
-  // Auth logic
+  // Auth logic (no offline fallback here, only UI)
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (data?.user) setUser(data.user)
@@ -44,33 +52,53 @@ export default function Parent() {
     }
   }, [])
 
-  // Load user profile (for PIN)
+  // Load user profile (for PIN), with offline fallback
   useEffect(() => {
     async function fetchProfile() {
-      if (!user) return setProfile(null)
-      const { data } = await supabase
-        .from('profiles')
-        .select('parent_pin')
-        .eq('id', user.id)
-        .single()
-      setProfile(data)
+      if (!user) {
+        setProfile(null)
+        return
+      }
+      if (isOnline()) {
+        const { data } = await supabase
+          .from('profiles')
+          .select('parent_pin')
+          .eq('id', user.id)
+          .single()
+        setProfile(data)
+        if (data && data.parent_pin) {
+          localStorage.setItem(PIN_KEY, data.parent_pin)
+        }
+      } else {
+        // Offline: load PIN from localStorage
+        const pin = localStorage.getItem(PIN_KEY)
+        if (pin) setProfile({ parent_pin: pin })
+        else setProfile(null)
+      }
     }
     fetchProfile()
   }, [user])
 
-  // Fetch favourites for this user, ordered by "order"
+  // Fetch favourites for this user, ordered by "order", with offline fallback
   useEffect(() => {
     if (!user) return
     fetchFavourites()
   }, [user])
 
   async function fetchFavourites() {
-    const { data } = await supabase
-      .from('favourites')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('order', { ascending: true })
-    setFavourites(data ?? [])
+    if (isOnline()) {
+      const { data } = await supabase
+        .from('favourites')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('order', { ascending: true })
+      setFavourites(data ?? [])
+      localStorage.setItem(FAVOURITES_KEY, JSON.stringify(data ?? []))
+    } else {
+      // Offline: load from localStorage
+      const offlineFavs = localStorage.getItem(FAVOURITES_KEY)
+      setFavourites(offlineFavs ? JSON.parse(offlineFavs) : [])
+    }
   }
 
   // Whenever favourites load, get all signed URLs for uploads
@@ -93,6 +121,10 @@ export default function Parent() {
     setError('')
     setLoading(true)
     try {
+      if (!isOnline()) {
+        setError('Offline: Cannot sign in or sign up')
+        return
+      }
       if (mode === 'signup') {
         const { error } = await supabase.auth.signUp({ email, password })
         if (error) throw error
@@ -109,22 +141,27 @@ export default function Parent() {
   }
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut()
+    if (isOnline()) {
+      await supabase.auth.signOut()
+    }
     setUser(null)
     setFavourites([])
     setProfile(null)
     setPinUnlocked(false)
   }
 
-  // Upload handler with label
+  // Upload handler with label (online only)
   async function handleUploadSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!user || !uploadFile || !uploadLabel) return
+    if (!isOnline()) {
+      setError('Offline: Cannot upload images')
+      return
+    }
     setUploading(true)
     const path = await uploadImage(uploadFile, user.id)
     setUploading(false)
     if (!path) return
-    // Find max order value for this user
     const maxOrder = favourites.length > 0 ? Math.max(...favourites.map(f => f.order ?? 0)) : 0
     const { error } = await supabase
       .from('favourites')
@@ -138,20 +175,43 @@ export default function Parent() {
     }
   }
 
-  // Remove favourite
+  // Remove favourite (offline: local only, online: sync to DB)
   async function handleRemoveFavourite(favId: number) {
+    if (!isOnline()) {
+      // Remove from local only
+      const newFavs = favourites.filter(f => f.id !== favId)
+      setFavourites(newFavs)
+      localStorage.setItem(FAVOURITES_KEY, JSON.stringify(newFavs))
+      return
+    }
     await supabase.from('favourites').delete().eq('id', favId)
     setFavourites(favourites.filter(f => f.id !== favId))
     fetchFavourites()
   }
 
-  // Add AAC symbol to favourites
+  // Add AAC symbol to favourites (offline: local only, online: sync to DB)
   async function addAacToFavourites(symbol: AacSymbol) {
     if (!user) return
     const exists = favourites.some(f => f.type === 'aac' && f.label === symbol.text)
     if (exists) return
-    // Find max order value for this user
     const maxOrder = favourites.length > 0 ? Math.max(...favourites.map(f => f.order ?? 0)) : 0
+
+    if (!isOnline()) {
+      // Offline: generate a fake ID
+      const newFav = {
+        id: Date.now(),
+        user_id: user.id,
+        image_url: symbol.imagePath,
+        label: symbol.text,
+        type: 'aac',
+        order: maxOrder + 1
+      }
+      const newFavs = [...favourites, newFav]
+      setFavourites(newFavs)
+      localStorage.setItem(FAVOURITES_KEY, JSON.stringify(newFavs))
+      return
+    }
+
     const { error } = await supabase
       .from('favourites')
       .insert([{ user_id: user.id, image_url: symbol.imagePath, label: symbol.text, type: 'aac', order: maxOrder + 1 }])
@@ -159,7 +219,7 @@ export default function Parent() {
     else if (error) setError(error.message)
   }
 
-  // Rearrangement logic
+  // Rearrangement logic (offline: local only, online: sync to DB)
   async function moveFavourite(favId: number, direction: 'up' | 'down') {
     const idx = favourites.findIndex(f => f.id === favId)
     if (idx === -1) return
@@ -168,8 +228,21 @@ export default function Parent() {
 
     const fav = favourites[idx]
     const targetFav = favourites[targetIdx]
+    // Swap their order values
+    const updated = [...favourites]
+    updated[idx] = targetFav
+    updated[targetIdx] = fav
 
-    // Swap their order values in DB
+    // Update order values
+    [updated[idx].order, updated[targetIdx].order] = [updated[targetIdx].order, updated[idx].order]
+
+    if (!isOnline()) {
+      setFavourites(updated)
+      localStorage.setItem(FAVOURITES_KEY, JSON.stringify(updated))
+      return
+    }
+
+    // Online: update DB
     await supabase
       .from('favourites')
       .update({ order: targetFav.order })
@@ -179,15 +252,11 @@ export default function Parent() {
       .update({ order: fav.order })
       .eq('id', targetFav.id)
 
-    // Update local state for immediate UI feedback
-    const updated = [...favourites]
-    updated[idx] = targetFav
-    updated[targetIdx] = fav
     setFavourites(updated)
     fetchFavourites()
   }
 
-  // PIN: Set PIN
+  // PIN: Set PIN (offline: local only)
   async function handleSetPin(e: React.FormEvent) {
     e.preventDefault()
     setPinSetError('')
@@ -199,7 +268,12 @@ export default function Parent() {
       setPinSetError('PINs do not match')
       return
     }
-    // Update profile
+    if (!isOnline()) {
+      localStorage.setItem(PIN_KEY, pinSetInput)
+      setProfile({ ...profile, parent_pin: pinSetInput })
+      setPinUnlocked(true)
+      return
+    }
     const { error } = await supabase
       .from('profiles')
       .update({ parent_pin: pinSetInput })
@@ -209,14 +283,16 @@ export default function Parent() {
       return
     }
     setProfile({ ...profile, parent_pin: pinSetInput })
+    localStorage.setItem(PIN_KEY, pinSetInput)
     setPinUnlocked(true)
   }
 
-  // PIN: Check PIN
+  // PIN: Check PIN (offline: compare with local value)
   function handleCheckPin(e: React.FormEvent) {
     e.preventDefault()
     setPinError('')
-    if (pinInput === profile.parent_pin) {
+    const pinToCheck = profile?.parent_pin || localStorage.getItem(PIN_KEY)
+    if (pinInput === pinToCheck) {
       setPinUnlocked(true)
       setPinInput('')
     } else {
@@ -370,7 +446,7 @@ export default function Parent() {
             type="file"
             accept="image/*"
             onChange={e => setUploadFile(e.target.files?.[0] ?? null)}
-            disabled={uploading}
+            disabled={uploading || !isOnline()}
             className="border rounded p-2"
             required
           />
@@ -385,11 +461,12 @@ export default function Parent() {
           <button
             type="submit"
             className="bg-green-600 text-white px-4 py-2 rounded"
-            disabled={uploading}
+            disabled={uploading || !isOnline()}
           >
             {uploading ? 'Uploading...' : 'Add'}
           </button>
         </form>
+        {!isOnline() && <div className="text-red-600 mt-2">Offline: Upload disabled</div>}
         {error && <div className="text-red-600 mt-2">{error}</div>}
       </div>
 
