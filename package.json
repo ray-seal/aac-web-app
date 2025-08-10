@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build && npx workbox generateSW workbox-config.cjs",
+    "build": "tsc -b && vite build && npx workbox generateSW workbox-config.js",
     "type-check": "tsc --noEmit",
     "lint": "eslint . --ext .ts,.tsx",
     "format": "prettier --check .",
