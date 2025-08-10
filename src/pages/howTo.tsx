@@ -44,7 +44,7 @@ Click the three dots in the top right corner.
 Click 'Add to Home Screen' and this will download the app.
 </figcaption>
 </li>
-<p className="text-center">By adding the app to the home screen of your childs device it will download and no longer give access to the rest of the internet, taking away the worry that you will need your child to have internet access to use this app. The device will however still need an internet connection to work.</p> 
+<p className="text-center"><b>By adding the app to the home screen of your childs device it will download and no longer give access to the rest of the internet, taking away the worry that you will need your child to have internet access to use this app.</b></p> 
           <li>
             <img src="images/SShome.jpeg" style={{ width: '25%' }} alt="Home Page" />
             <figcaption>
