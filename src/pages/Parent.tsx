@@ -12,21 +12,24 @@ function isOnline() {
   return typeof navigator !== 'undefined' ? navigator.onLine : true
 }
 
-// Offline sync queue helpers
-function addToOfflineQueue(action: any) {
-  const queue = JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]')
+type OfflineAction =
+  | { type: 'add'; data: any }
+  | { type: 'remove'; id: number }
+  | { type: 'move'; id: number; direction: 'up' | 'down' }
+
+function addToOfflineQueue(action: OfflineAction) {
+  const queue: OfflineAction[] = JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]')
   queue.push(action)
   localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue))
 }
 function clearOfflineQueue() {
   localStorage.removeItem(OFFLINE_QUEUE_KEY)
 }
-function getOfflineQueue() {
+function getOfflineQueue(): OfflineAction[] {
   return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]')
 }
 
 export default function Parent() {
-  // Auth and user state
   const [user, setUser] = useState<any>(null)
   const [profile, setProfile] = useState<any>(null)
   const [email, setEmail] = useState('')
@@ -35,7 +38,6 @@ export default function Parent() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  // PIN lock state
   const [pinInput, setPinInput] = useState('')
   const [pinSetInput, setPinSetInput] = useState('')
   const [pinConfirmInput, setPinConfirmInput] = useState('')
@@ -43,7 +45,6 @@ export default function Parent() {
   const [pinSetError, setPinSetError] = useState('')
   const [pinUnlocked, setPinUnlocked] = useState(false)
 
-  // Favourites and uploads
   const [favourites, setFavourites] = useState<any[]>([])
   const [signedUrls, setSignedUrls] = useState<{ [id: number]: string }>({})
   const [uploading, setUploading] = useState(false)
@@ -52,7 +53,6 @@ export default function Parent() {
 
   const navigate = useNavigate()
 
-  // Auth logic (no offline fallback here, only UI)
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (data?.user) setUser(data.user)
@@ -65,7 +65,6 @@ export default function Parent() {
     }
   }, [])
 
-  // Load user profile (for PIN), with offline fallback
   useEffect(() => {
     async function fetchProfile() {
       if (!user) {
@@ -83,7 +82,6 @@ export default function Parent() {
           localStorage.setItem(PIN_KEY, data.parent_pin)
         }
       } else {
-        // Offline: load PIN from localStorage
         const pin = localStorage.getItem(PIN_KEY)
         if (pin) setProfile({ parent_pin: pin })
         else setProfile(null)
@@ -92,7 +90,6 @@ export default function Parent() {
     fetchProfile()
   }, [user])
 
-  // Fetch favourites for this user, ordered by "order", with offline fallback
   useEffect(() => {
     if (!user) return
     fetchFavourites()
@@ -108,13 +105,11 @@ export default function Parent() {
       setFavourites(data ?? [])
       localStorage.setItem(FAVOURITES_KEY, JSON.stringify(data ?? []))
     } else {
-      // Offline: load from localStorage
       const offlineFavs = localStorage.getItem(FAVOURITES_KEY)
       setFavourites(offlineFavs ? JSON.parse(offlineFavs) : [])
     }
   }
 
-  // Whenever favourites load, get all signed URLs for uploads
   useEffect(() => {
     async function loadSignedUrls() {
       const uploads = favourites.filter(f => f.type !== 'aac')
@@ -128,7 +123,6 @@ export default function Parent() {
     else setSignedUrls({})
   }, [favourites])
 
-  // Auth form handler
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -163,7 +157,6 @@ export default function Parent() {
     setPinUnlocked(false)
   }
 
-  // Upload handler with label (online only)
   async function handleUploadSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!user || !uploadFile || !uploadLabel) return
@@ -188,7 +181,6 @@ export default function Parent() {
     }
   }
 
-  // Remove favourite (offline: local only, online: sync to DB)
   async function handleRemoveFavourite(favId: number) {
     if (!isOnline()) {
       const newFavs = favourites.filter(f => f.id !== favId)
@@ -202,7 +194,6 @@ export default function Parent() {
     fetchFavourites()
   }
 
-  // Add AAC symbol to favourites (offline: local only, online: sync to DB)
   async function addAacToFavourites(symbol: AacSymbol) {
     if (!user) return
     const exists = favourites.some(f => f.type === 'aac' && f.label === symbol.text)
@@ -210,7 +201,6 @@ export default function Parent() {
     const maxOrder = favourites.length > 0 ? Math.max(...favourites.map(f => f.order ?? 0)) : 0
 
     if (!isOnline()) {
-      // Offline: generate a fake ID
       const newFav = {
         id: Date.now(),
         user_id: user.id,
@@ -233,7 +223,6 @@ export default function Parent() {
     else if (error) setError(error.message)
   }
 
-  // Rearrangement logic (offline: local only, online: sync to DB)
   async function moveFavourite(favId: number, direction: 'up' | 'down') {
     const idx = favourites.findIndex(f => f.id === favId)
     if (idx === -1) return
@@ -246,7 +235,6 @@ export default function Parent() {
     updated[idx] = targetFav
     updated[targetIdx] = fav
 
-    // Update order values
     [updated[idx].order, updated[targetIdx].order] = [updated[targetIdx].order, updated[idx].order]
 
     if (!isOnline()) {
@@ -256,7 +244,6 @@ export default function Parent() {
       return
     }
 
-    // Online: update DB
     await supabase
       .from('favourites')
       .update({ order: targetFav.order })
@@ -270,7 +257,6 @@ export default function Parent() {
     fetchFavourites()
   }
 
-  // PIN: Set PIN (offline: local only)
   async function handleSetPin(e: React.FormEvent) {
     e.preventDefault()
     setPinSetError('')
@@ -301,7 +287,6 @@ export default function Parent() {
     setPinUnlocked(true)
   }
 
-  // PIN: Check PIN (offline: compare with local value)
   function handleCheckPin(e: React.FormEvent) {
     e.preventDefault()
     setPinError('')
@@ -315,17 +300,15 @@ export default function Parent() {
     }
   }
 
-  // Sync local offline changes to Supabase when back online
   useEffect(() => {
     if (!user) return
     function syncOfflineQueue() {
       if (!isOnline()) return
-      const queue = getOfflineQueue()
+      const queue: OfflineAction[] = getOfflineQueue()
       if (!queue.length) return
 
       Promise.all(queue.map(async action => {
         if (action.type === 'add') {
-          // Remove fake id before insert
           const { id, ...toInsert } = action.data
           await supabase
             .from('favourites')
@@ -336,7 +319,6 @@ export default function Parent() {
             .delete()
             .eq('id', action.id)
         } else if (action.type === 'move') {
-          // Find fav and target, swap order
           const favs = [...favourites]
           const idx = favs.findIndex(f => f.id === action.id)
           const targetIdx = action.direction === 'up' ? idx - 1 : idx + 1
@@ -363,7 +345,6 @@ export default function Parent() {
     return () => window.removeEventListener('online', syncOfflineQueue)
   }, [user, favourites])
 
-  // Render: not logged in
   if (!user) {
     return (
       <div className="max-w-md mx-auto mt-10 p-4 bg-white rounded shadow">
@@ -405,7 +386,6 @@ export default function Parent() {
     )
   }
 
-  // PIN: Prompt for PIN if set and not unlocked
   if (profile && profile.parent_pin && !pinUnlocked) {
     return (
       <div className="max-w-xs mx-auto mt-20 p-6 bg-white rounded shadow flex flex-col items-center">
@@ -434,7 +414,6 @@ export default function Parent() {
     )
   }
 
-  // PIN: Prompt to set PIN if none set
   if (profile && !profile.parent_pin) {
     return (
       <div className="max-w-xs mx-auto mt-20 p-6 bg-white rounded shadow flex flex-col items-center">
@@ -475,7 +454,6 @@ export default function Parent() {
     )
   }
 
-  // Main Parent content (unlocked)
   return (
     <div className="max-w-4xl mx-auto mt-10 p-4 bg-white rounded shadow">
       <div className="flex justify-between items-center mb-6">
@@ -500,7 +478,6 @@ export default function Parent() {
       </div>
       <p className="mb-4">You are signed in as <span className="font-mono">{user.email}</span></p>
 
-      {/* Upload new image */}
       <div className="mb-8">
         <h3 className="font-bold mb-2">Upload new favourite</h3>
         <form onSubmit={handleUploadSubmit} className="flex gap-2 items-end flex-wrap">
@@ -532,7 +509,6 @@ export default function Parent() {
         {error && <div className="text-red-600 mt-2">{error}</div>}
       </div>
 
-      {/* All AAC symbols with 'add to favourites' */}
       <div className="mb-8">
         <h3 className="font-bold mb-2">All AAC Symbols (add to favourites)</h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4">
@@ -556,47 +532,44 @@ export default function Parent() {
         </div>
       </div>
 
-      {/* Favourites grid */}
-      <div>
-        <h3 className="font-bold mb-2">Your Favourites</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4 mt-4">
-          {favourites.length === 0 && (
-            <p className="col-span-full text-gray-600 text-center">(No favourites yet)</p>
-          )}
-          {favourites.map((fav: any, idx) => (
-            <div key={fav.id} className="border rounded p-2 flex flex-col items-center bg-gray-50">
-              <img
-                src={fav.type === 'aac'
-                  ? fav.image_url
-                  : (signedUrls[fav.id] || '')}
-                alt={fav.label}
-                className="w-16 h-16 object-cover rounded mb-2"
-                style={{ background: '#E0E7EF' }}
-              />
-              <div className="text-center text-xs font-medium mb-1">{fav.label}</div>
-              <div className="flex gap-1 mb-1">
-                <button
-                  disabled={idx === 0}
-                  onClick={() => moveFavourite(fav.id, 'up')}
-                  className="px-1 py-0 bg-blue-400 text-white rounded text-xs"
-                  title="Move up"
-                >↑</button>
-                <button
-                  disabled={idx === favourites.length - 1}
-                  onClick={() => moveFavourite(fav.id, 'down')}
-                  className="px-1 py-0 bg-blue-400 text-white rounded text-xs"
-                  title="Move down"
-                >↓</button>
-              </div>
+      <h3 className="font-bold mb-2">Your Favourites</h3>
+      <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4 mt-4">
+        {favourites.length === 0 && (
+          <p className="col-span-full text-gray-600 text-center">(No favourites yet)</p>
+        )}
+        {favourites.map((fav: any, idx) => (
+          <div key={fav.id} className="border rounded p-2 flex flex-col items-center bg-gray-50">
+            <img
+              src={fav.type === 'aac'
+                ? fav.image_url
+                : (signedUrls[fav.id] || '')}
+              alt={fav.label}
+              className="w-16 h-16 object-cover rounded mb-2"
+              style={{ background: '#E0E7EF' }}
+            />
+            <div className="text-center text-xs font-medium mb-1">{fav.label}</div>
+            <div className="flex gap-1 mb-1">
               <button
-                onClick={() => handleRemoveFavourite(fav.id)}
-                className="px-2 py-1 bg-red-500 text-white rounded text-xs"
-              >
-                Remove
-              </button>
+                disabled={idx === 0}
+                onClick={() => moveFavourite(fav.id, 'up')}
+                className="px-1 py-0 bg-blue-400 text-white rounded text-xs"
+                title="Move up"
+              >↑</button>
+              <button
+                disabled={idx === favourites.length - 1}
+                onClick={() => moveFavourite(fav.id, 'down')}
+                className="px-1 py-0 bg-blue-400 text-white rounded text-xs"
+                title="Move down"
+              >↓</button>
             </div>
-          ))}
-        </div>
+            <button
+              onClick={() => handleRemoveFavourite(fav.id)}
+              className="px-2 py-1 bg-red-500 text-white rounded text-xs"
+            >
+              Remove
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   )
