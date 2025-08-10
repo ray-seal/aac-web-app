@@ -41,3 +41,6 @@
     "vite-plugin-pwa": "^0.16.5"
   }
 }
+"scripts": {
+  "build": "vite build && workbox generateSW workbox-config.js"
+}
