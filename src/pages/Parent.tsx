@@ -4,12 +4,25 @@ import { aacSymbols, AacSymbol } from '../data/aac-symbols'
 import { uploadImage, getSignedImageUrl } from '../utils/uploadImage'
 import { useNavigate } from 'react-router-dom'
 
-// Use localStorage keys for offline cache
 const FAVOURITES_KEY = 'aac_favourites'
 const PIN_KEY = 'aac_parent_pin'
+const OFFLINE_QUEUE_KEY = 'aac_fav_queue'
 
 function isOnline() {
   return typeof navigator !== 'undefined' ? navigator.onLine : true
+}
+
+// Offline sync queue helpers
+function addToOfflineQueue(action: any) {
+  const queue = JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]')
+  queue.push(action)
+  localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue))
+}
+function clearOfflineQueue() {
+  localStorage.removeItem(OFFLINE_QUEUE_KEY)
+}
+function getOfflineQueue() {
+  return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]')
 }
 
 export default function Parent() {
@@ -178,10 +191,10 @@ export default function Parent() {
   // Remove favourite (offline: local only, online: sync to DB)
   async function handleRemoveFavourite(favId: number) {
     if (!isOnline()) {
-      // Remove from local only
       const newFavs = favourites.filter(f => f.id !== favId)
       setFavourites(newFavs)
       localStorage.setItem(FAVOURITES_KEY, JSON.stringify(newFavs))
+      addToOfflineQueue({ type: 'remove', id: favId })
       return
     }
     await supabase.from('favourites').delete().eq('id', favId)
@@ -209,6 +222,7 @@ export default function Parent() {
       const newFavs = [...favourites, newFav]
       setFavourites(newFavs)
       localStorage.setItem(FAVOURITES_KEY, JSON.stringify(newFavs))
+      addToOfflineQueue({ type: 'add', data: newFav })
       return
     }
 
@@ -228,7 +242,6 @@ export default function Parent() {
 
     const fav = favourites[idx]
     const targetFav = favourites[targetIdx]
-    // Swap their order values
     const updated = [...favourites]
     updated[idx] = targetFav
     updated[targetIdx] = fav
@@ -239,6 +252,7 @@ export default function Parent() {
     if (!isOnline()) {
       setFavourites(updated)
       localStorage.setItem(FAVOURITES_KEY, JSON.stringify(updated))
+      addToOfflineQueue({ type: 'move', id: fav.id, direction })
       return
     }
 
@@ -300,6 +314,54 @@ export default function Parent() {
       setPinInput('')
     }
   }
+
+  // Sync local offline changes to Supabase when back online
+  useEffect(() => {
+    if (!user) return
+    function syncOfflineQueue() {
+      if (!isOnline()) return
+      const queue = getOfflineQueue()
+      if (!queue.length) return
+
+      Promise.all(queue.map(async action => {
+        if (action.type === 'add') {
+          // Remove fake id before insert
+          const { id, ...toInsert } = action.data
+          await supabase
+            .from('favourites')
+            .insert([{ ...toInsert }])
+        } else if (action.type === 'remove') {
+          await supabase
+            .from('favourites')
+            .delete()
+            .eq('id', action.id)
+        } else if (action.type === 'move') {
+          // Find fav and target, swap order
+          const favs = [...favourites]
+          const idx = favs.findIndex(f => f.id === action.id)
+          const targetIdx = action.direction === 'up' ? idx - 1 : idx + 1
+          if (idx === -1 || targetIdx < 0 || targetIdx >= favs.length) return
+          const fav = favs[idx]
+          const targetFav = favs[targetIdx]
+          await supabase
+            .from('favourites')
+            .update({ order: targetFav.order })
+            .eq('id', fav.id)
+          await supabase
+            .from('favourites')
+            .update({ order: fav.order })
+            .eq('id', targetFav.id)
+        }
+      })).then(() => {
+        clearOfflineQueue()
+        fetchFavourites()
+      })
+    }
+
+    window.addEventListener('online', syncOfflineQueue)
+    if (isOnline()) syncOfflineQueue()
+    return () => window.removeEventListener('online', syncOfflineQueue)
+  }, [user, favourites])
 
   // Render: not logged in
   if (!user) {
