@@ -345,10 +345,21 @@ export default function Parent() {
     return () => window.removeEventListener('online', syncOfflineQueue)
   }, [user, favourites])
 
+  // SIGNUP/SIGNIN SCREEN
   if (!user) {
     return (
       <div className="max-w-md mx-auto mt-10 p-4 bg-white rounded shadow">
-        <h2 className="text-xl font-bold mb-4">{mode === 'signup' ? 'Parent Sign Up' : 'Parent Sign In'}</h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold">
+            {mode === 'signup' ? 'Parent Sign Up' : 'Parent Sign In'}
+          </h2>
+          <button
+            onClick={() => navigate('/how-to')}
+            className="bg-gray-400 text-white px-4 py-2 rounded"
+          >
+            How To Guide
+          </button>
+        </div>
         <form onSubmit={handleAuth} className="flex flex-col gap-3">
           <input
             type="email"
@@ -386,10 +397,19 @@ export default function Parent() {
     )
   }
 
+  // PIN UNLOCK SCREEN
   if (profile && profile.parent_pin && !pinUnlocked) {
     return (
       <div className="max-w-xs mx-auto mt-20 p-6 bg-white rounded shadow flex flex-col items-center">
-        <h2 className="text-lg font-semibold mb-2">Enter Parent PIN</h2>
+        <div className="flex justify-between items-center w-full mb-2">
+          <h2 className="text-lg font-semibold">Enter Parent PIN</h2>
+          <button
+            onClick={() => navigate('/how-to')}
+            className="bg-gray-400 text-white px-4 py-2 rounded text-xs"
+          >
+            How To Guide
+          </button>
+        </div>
         <form onSubmit={handleCheckPin} className="flex flex-col gap-3 w-full">
           <input
             type="password"
@@ -414,10 +434,19 @@ export default function Parent() {
     )
   }
 
+  // SET PIN SCREEN
   if (profile && !profile.parent_pin) {
     return (
       <div className="max-w-xs mx-auto mt-20 p-6 bg-white rounded shadow flex flex-col items-center">
-        <h2 className="text-lg font-semibold mb-2">Set Parent PIN</h2>
+        <div className="flex justify-between items-center w-full mb-2">
+          <h2 className="text-lg font-semibold">Set Parent PIN</h2>
+          <button
+            onClick={() => navigate('/how-to')}
+            className="bg-gray-400 text-white px-4 py-2 rounded text-xs"
+          >
+            How To Guide
+          </button>
+        </div>
         <form onSubmit={handleSetPin} className="flex flex-col gap-3 w-full">
           <input
             type="password"
@@ -454,6 +483,7 @@ export default function Parent() {
     )
   }
 
+  // MAIN PARENT PAGE
   return (
     <div className="max-w-4xl mx-auto mt-10 p-4 bg-white rounded shadow">
       <div className="flex justify-between items-center mb-6">
