@@ -30,6 +30,10 @@ export default function HomePage() {
   const [signedUrls, setSignedUrls] = useState<{ [id: number]: string }>({})
   const [selectedSymbols, setSelectedSymbols] = useState<AacSymbol[]>([])
 
+  // Compute tab visibility
+  const showAacTab = !user || favourites.length === 0
+  const showFavouritesTab = !!user
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (data?.user) setUser(data.user)
@@ -66,11 +70,16 @@ export default function HomePage() {
     }
   }
 
+  // If a user logs in and has favourites, switch to "favourites" tab,
+  // and if "aac" tab is not visible, don't allow switching to it
   useEffect(() => {
-    if (user && favourites.length > 0 && tab !== 'favourites') {
+    if (!showAacTab && tab !== 'favourites') {
       setTab('favourites')
     }
-  }, [favourites, user])
+    if (showAacTab && tab !== 'aac' && (!user || favourites.length === 0)) {
+      setTab('aac')
+    }
+  }, [showAacTab, tab, user, favourites])
 
   useEffect(() => {
     async function loadSignedUrls() {
@@ -229,13 +238,15 @@ export default function HomePage() {
 
       {/* Tabs */}
       <div className="flex gap-4 mb-6">
-        <button
-          className={tab === 'aac' ? 'font-bold underline' : ''}
-          onClick={() => setTab('aac')}
-        >
-          AAC Symbols
-        </button>
-        {user && (
+        {showAacTab && (
+          <button
+            className={tab === 'aac' ? 'font-bold underline' : ''}
+            onClick={() => setTab('aac')}
+          >
+            AAC Symbols
+          </button>
+        )}
+        {showFavouritesTab && (
           <button
             className={tab === 'favourites' ? 'font-bold underline' : ''}
             onClick={() => setTab('favourites')}
@@ -244,13 +255,13 @@ export default function HomePage() {
           </button>
         )}
       </div>
-      {tab === 'aac' && (
+      {tab === 'aac' && showAacTab && (
         <AACGrid
           items={aacSymbols}
           onSelect={handleSelectSymbol}
         />
       )}
-      {tab === 'favourites' && user && renderFavouritesGrid()}
+      {tab === 'favourites' && showFavouritesTab && renderFavouritesGrid()}
     </div>
   )
 }
