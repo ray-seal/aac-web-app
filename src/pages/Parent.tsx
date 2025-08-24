@@ -160,15 +160,38 @@ export default function Parent() {
   async function handleUploadSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!user || !uploadFile || !uploadLabel) return
+
+    const maxOrder = favourites.length > 0 ? Math.max(...favourites.map(f => f.order ?? 0)) : 0
+
     if (!isOnline()) {
-      setError('Offline: Cannot upload images')
+      // Offline mode: Convert file to base64 and store in offline queue
+      const reader = new FileReader()
+      reader.onload = () => {
+        // Store the base64 image in offline queue
+        const newFav = {
+          id: Date.now(),
+          user_id: user.id,
+          image_url: '', // will be set after upload
+          label: uploadLabel,
+          type: 'upload',
+          order: maxOrder + 1,
+          fileData: reader.result, // base64 string
+        }
+        const newFavs = [...favourites, newFav]
+        setFavourites(newFavs)
+        localStorage.setItem(FAVOURITES_KEY, JSON.stringify(newFavs))
+        addToOfflineQueue({ type: 'add', data: newFav })
+        setUploadLabel('')
+        setUploadFile(null)
+      }
+      reader.readAsDataURL(uploadFile)
       return
     }
+
     setUploading(true)
     const path = await uploadImage(uploadFile, user.id)
     setUploading(false)
     if (!path) return
-    const maxOrder = favourites.length > 0 ? Math.max(...favourites.map(f => f.order ?? 0)) : 0
     const { error } = await supabase
       .from('favourites')
       .insert([{ user_id: user.id, image_url: path, label: uploadLabel, type: 'upload', order: maxOrder + 1 }])
@@ -300,7 +323,7 @@ export default function Parent() {
     }
   }
 
-  // FIX: Prevent duplicate favourites when syncing offline queue
+  // Sync offline queue to Supabase when back online (including image uploads)
   useEffect(() => {
     if (!user) return
     function syncOfflineQueue() {
@@ -310,8 +333,27 @@ export default function Parent() {
 
       Promise.all(queue.map(async action => {
         if (action.type === 'add') {
-          const { id, ...toInsert } = action.data
-          // Check for duplicate before inserting (label, type, user_id)
+          const { id, fileData, ...toInsert } = action.data
+          // If it's an upload with fileData (base64), upload image first
+          if (fileData) {
+            // Convert base64 to File
+            try {
+              const res = await fetch(fileData)
+              const blob = await res.blob()
+              const file = new File([blob], "offline-upload.png", { type: blob.type })
+              const path = await uploadImage(file, toInsert.user_id)
+              if (path) {
+                toInsert.image_url = path
+              } else {
+                // If upload failed, skip
+                return
+              }
+            } catch (err) {
+              // Skip this queue item if file conversion/upload fails
+              return
+            }
+          }
+          // Prevent duplicate before inserting (label, type, user_id)
           const { data: existing } = await supabase
             .from('favourites')
             .select('*')
@@ -330,6 +372,7 @@ export default function Parent() {
             .delete()
             .eq('id', action.id)
         } else if (action.type === 'move') {
+          // Move logic (order swapping) as before
           const favs = [...favourites]
           const idx = favs.findIndex(f => f.id === action.id)
           const targetIdx = action.direction === 'up' ? idx - 1 : idx + 1
@@ -354,6 +397,7 @@ export default function Parent() {
     window.addEventListener('online', syncOfflineQueue)
     if (isOnline()) syncOfflineQueue()
     return () => window.removeEventListener('online', syncOfflineQueue)
+    // eslint-disable-next-line
   }, [user, favourites])
 
   // SIGNUP/SIGNIN SCREEN
@@ -526,7 +570,7 @@ export default function Parent() {
             type="file"
             accept="image/*"
             onChange={e => setUploadFile(e.target.files?.[0] ?? null)}
-            disabled={uploading || !isOnline()}
+            disabled={uploading}
             className="border rounded p-2"
             required
           />
@@ -541,12 +585,12 @@ export default function Parent() {
           <button
             type="submit"
             className="bg-green-600 text-white px-4 py-2 rounded"
-            disabled={uploading || !isOnline()}
+            disabled={uploading}
           >
             {uploading ? 'Uploading...' : 'Add'}
           </button>
         </form>
-        {!isOnline() && <div className="text-red-600 mt-2">Offline: Upload disabled</div>}
+        {!isOnline() && <div className="text-yellow-600 mt-2">Offline: Uploads will be queued and synced when you go back online</div>}
         {error && <div className="text-red-600 mt-2">{error}</div>}
       </div>
 
