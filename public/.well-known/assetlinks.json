@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.yourcompany.speakly",
+      "sha256_cert_fingerprints": [
+        "8D:31:BF:C5:6D:9A:01:B0:AA:DD:37:8D:55:B6:88:08:C2:3C:59:A2:EA:DA:B0:1A:E9:9C:E6:B9:AE:62:AA:31"
+      ]
+    }
+  }
+]
