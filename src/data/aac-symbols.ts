@@ -13,6 +13,48 @@ export const aacSymbols: AacSymbol[] = [
     category: 'actions'
   },
 
+  {
+    id: 'i dont want',
+    text: 'I dont want',
+    imagePath: '/aac-images/i-dont-want.png',
+    category: 'actions'
+  },
+
+  {
+    id: 'garden',
+    text: 'Garden',
+    imagePath: '/aac-images/garden.png',
+    category: 'places'
+  },
+
+  {
+    id: 'snack',
+    text: 'Snack',
+    imagePath: '/aac-images/snack.png',
+    category: 'food'
+  },
+
+  {
+    id: 'breakfast',
+    text: 'Breakfast',
+    imagePath: '/aac-images/breakfast.png',
+    category: 'food'
+  },
+
+  {
+    id: 'lunch',
+    text: 'Lunch',
+    imagePath: '/aac-images/lunch.jpeg',
+    category: 'food'
+  },
+
+  {
+    id: 'dinner',
+    text: 'Dinner',
+    imagePath: '/aac-images/dinner.jpeg',
+    category: 'food'
+  },
+
    {
     id: 'cheese',
     text: 'Cheese',
@@ -102,6 +144,13 @@ export const aacSymbols: AacSymbol[] = [
     id: 'swing',
     text: 'Swing',
     imagePath: '/aac-images/swing.jpg',
+    category: 'things'
+  },
+  
+  {
+    id: 'car',
+    text: 'Car',
+    imagePath: '/aac-images/car.png',
     category: 'things'
   },
   
