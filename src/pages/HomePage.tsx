@@ -24,7 +24,7 @@ export default function HomePage() {
   const [tab, setTab] = useState<'all' | 'home' | 'school'>('all')
   const [user, setUser] = useState<any>(null)
   const [symbols, setSymbols] = useState<HomeSchoolSymbol[]>([])
-  const [signedUrls, setSignedUrls] = useState<{ [id: number]: string }>({})
+  const [signedUrls, setSignedUrls] = useState<{ [id: string]: string }>({})
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -65,10 +65,10 @@ export default function HomePage() {
   useEffect(() => {
     async function loadSignedUrls() {
       const uploads = symbols.filter(f => f.type !== 'aac')
-      const urlMap: { [id: number]: string } = {}
+      const urlMap: { [id: string]: string } = {}
       await Promise.all(
         uploads.map(async sym => {
-          urlMap[sym.id] = await getSignedImageUrl(sym.image_url)
+          urlMap[String(sym.id)] = await getSignedImageUrl(sym.image_url)
         })
       )
       setSignedUrls(urlMap)
@@ -95,7 +95,7 @@ export default function HomePage() {
         {filtered.map((sym: any) => (
           <div key={sym.id} className="border rounded p-2 flex flex-col items-center bg-gray-50">
             <img
-              src={sym.type === 'aac' ? sym.image_url : (signedUrls[sym.id] || sym.image_url)}
+              src={sym.type === 'aac' ? sym.image_url : (signedUrls[String(sym.id)] || sym.image_url)}
               alt={sym.label}
               className="w-16 h-16 object-cover rounded mb-2"
             />
