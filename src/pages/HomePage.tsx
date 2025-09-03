@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { getSignedImageUrl } from '../utils/uploadImage'
+import { aacSymbols, AacSymbol } from '../data/aac-symbols'
 
 const HOME_SCHOOL_KEY = 'aac_homeschool'
 const TAB_PREF_KEY = 'aac_tab_preferences'
@@ -12,7 +13,7 @@ function isOnline() {
 
 type HomeSchoolSymbol = {
   id: string | number
-  user_id: string
+  user_id?: string
   image_url: string
   label: string
   type: 'aac' | 'upload'
@@ -32,34 +33,71 @@ function getTabPrefs(): TabPrefs {
   }
 }
 
+// Convert AAC symbols to HomeSchoolSymbol for guest mode
+function guestSymbolsFromAac(): HomeSchoolSymbol[] {
+  return aacSymbols.map((sym, idx) => ({
+    id: sym.id,
+    image_url: sym.imagePath,
+    label: sym.text,
+    type: 'aac',
+    order: idx,
+    home: true,
+    school: true,
+  }))
+}
+
 export default function HomePage() {
   const [tab, setTab] = useState<'all' | 'home' | 'school'>('all')
   const [user, setUser] = useState<any>(null)
   const [symbols, setSymbols] = useState<HomeSchoolSymbol[]>([])
   const [signedUrls, setSignedUrls] = useState<{ [id: string]: string }>({})
-  const [tabPrefs] = useState<TabPrefs>(getTabPrefs())
+  const [tabPrefs, setTabPrefs] = useState<TabPrefs>(getTabPrefs())
   const [panel, setPanel] = useState<HomeSchoolSymbol[]>([])
+  const [isGuest, setIsGuest] = useState(false)
 
+  // On mount, check user
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      if (data?.user) setUser(data.user)
+      if (data?.user) {
+        setUser(data.user)
+        setIsGuest(false)
+      } else {
+        setIsGuest(true)
+        setUser(null)
+        setSymbols(guestSymbolsFromAac())
+        setTab('all')
+        setTabPrefs({ all: true, home: false, school: false })
+      }
     })
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
+      if (session?.user) {
+        setUser(session.user)
+        setIsGuest(false)
+      } else {
+        setIsGuest(true)
+        setUser(null)
+        setSymbols(guestSymbolsFromAac())
+        setTab('all')
+        setTabPrefs({ all: true, home: false, school: false })
+      }
     })
     return () => {
       listener?.subscription.unsubscribe()
     }
+    // eslint-disable-next-line
   }, [])
 
+  // If user logs in, fetch their symbols
   useEffect(() => {
+    if (isGuest) return
     if (!user) {
       setSymbols([])
       setSignedUrls({})
       return
     }
     fetchSymbols()
-  }, [user])
+    // eslint-disable-next-line
+  }, [user, isGuest])
 
   async function fetchSymbols() {
     if (isOnline()) {
@@ -76,6 +114,7 @@ export default function HomePage() {
     }
   }
 
+  // Signed URLs for uploads (user mode only)
   useEffect(() => {
     async function loadSignedUrls() {
       const uploads = symbols.filter(f => f.type !== 'aac')
@@ -87,27 +126,30 @@ export default function HomePage() {
       )
       setSignedUrls(urlMap)
     }
-    if (symbols.length > 0) {
+    if (!isGuest && symbols.length > 0) {
       loadSignedUrls()
     } else {
       setSignedUrls({})
     }
-  }, [symbols])
+  }, [symbols, isGuest])
 
   // Only show enabled tabs in UI
-  const enabledTabs = [
-    tabPrefs.all && { key: 'all', label: 'All' },
-    tabPrefs.home && { key: 'home', label: 'Home' },
-    tabPrefs.school && { key: 'school', label: 'School' },
-  ].filter(Boolean) as { key: 'all' | 'home' | 'school'; label: string }[]
+  const enabledTabs = isGuest
+    ? [{ key: 'all', label: 'All' }]
+    : [
+        tabPrefs.all && { key: 'all', label: 'All' },
+        tabPrefs.home && { key: 'home', label: 'Home' },
+        tabPrefs.school && { key: 'school', label: 'School' },
+      ].filter(Boolean) as { key: 'all' | 'home' | 'school'; label: string }[]
 
   // Set tab to first enabled if current one disabled
   useEffect(() => {
-    if (!tabPrefs[tab]) {
+    if (!enabledTabs.find(t => t.key === tab)) {
       const first = enabledTabs[0]?.key || 'all'
       setTab(first)
     }
-  }, [tabPrefs])
+    // eslint-disable-next-line
+  }, [tabPrefs, enabledTabs])
 
   // Filtered symbols by tab
   const filtered = tab === 'all'
@@ -226,6 +268,7 @@ export default function HomePage() {
             key={t.key}
             className={tab === t.key ? 'font-bold underline' : ''}
             onClick={() => setTab(t.key)}
+            disabled={isGuest && t.key !== 'all'}
           >
             {t.label}
           </button>
