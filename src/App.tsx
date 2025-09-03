@@ -4,7 +4,6 @@ import { NotFoundPage } from './pages/NotFoundPage'
 import HowToPage from './pages/howTo'
 import Parent from './pages/Parent'
 import AuthPage from './pages/AuthPage'
-import { ProtectedRoute } from './components/ProtectedRoute'
 import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 
