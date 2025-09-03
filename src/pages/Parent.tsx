@@ -47,6 +47,43 @@ function clearOfflineQueue() {
   localStorage.removeItem(OFFLINE_QUEUE_KEY)
 }
 
+// Caches user-uploaded images as data URLs in localStorage for offline use
+async function cacheUserImages(symbols: HomeSchoolSymbol[], signedUrls: { [id: string]: string }) {
+  const cache: { [id: string]: string } = JSON.parse(localStorage.getItem('user_image_cache') || '{}');
+  let updated = false;
+  for (const sym of symbols) {
+    if (sym.type === 'upload' && sym.image_url) {
+      const imgUrl = signedUrls[String(sym.id)] || sym.image_url;
+      if (!cache[sym.id]) {
+        try {
+          const response = await fetch(imgUrl);
+          const blob = await response.blob();
+          const reader = new FileReader();
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+          cache[sym.id] = dataUrl;
+          updated = true;
+        } catch (err) {
+          // Could not fetch/couldn't cache
+        }
+      }
+    }
+  }
+  if (updated) {
+    localStorage.setItem('user_image_cache', JSON.stringify(cache));
+  }
+}
+
+function getSymbolImgSrc(sym: HomeSchoolSymbol, signedUrls: { [id: string]: string }) {
+  if (sym.type === 'aac') return sym.image_url;
+  const cache = JSON.parse(localStorage.getItem('user_image_cache') || '{}');
+  if (!window.navigator.onLine && cache[sym.id]) return cache[sym.id];
+  return signedUrls[String(sym.id)] || sym.image_url;
+}
+
 export default function Parent() {
   // PIN logic
   const [showPinPrompt, setShowPinPrompt] = useState(true)
@@ -190,7 +227,7 @@ export default function Parent() {
   }
 
   useEffect(() => {
-    async function loadSignedUrls() {
+    async function loadSignedUrlsAndCache() {
       const uploads = symbols.filter(f => f.type !== 'aac')
       const urlMap: { [id: string]: string } = {}
       await Promise.all(
@@ -199,9 +236,12 @@ export default function Parent() {
         })
       )
       setSignedUrls(urlMap)
+      if (isOnline()) {
+        await cacheUserImages(symbols, urlMap)
+      }
     }
     if (symbols.length > 0) {
-      loadSignedUrls()
+      loadSignedUrlsAndCache()
     } else {
       setSignedUrls({})
     }
@@ -225,7 +265,6 @@ export default function Parent() {
           }
         ])
     } else {
-      // queue tab pref change
       addToOfflineQueue({
         type: 'tab_prefs',
         data: {
@@ -588,7 +627,7 @@ export default function Parent() {
           .filter(s => s.type === 'upload')
           .map(sym => (
             <div key={sym.id} className="border rounded px-2 py-1 flex items-center gap-3 bg-gray-50 mb-2">
-              <img src={signedUrls[String(sym.id)] || sym.image_url} alt={sym.label} className="w-8 h-8 object-cover rounded" />
+              <img src={getSymbolImgSrc(sym, signedUrls)} alt={sym.label} className="w-8 h-8 object-cover rounded" />
               <span className="text-xs">{sym.label}</span>
               <label className="flex items-center gap-1 text-xs">
                 <input
@@ -630,9 +669,7 @@ export default function Parent() {
           {filtered.map((sym: any) => (
             <div key={sym.id} className="border rounded p-2 flex flex-col items-center bg-gray-50">
               <img
-                src={sym.type === 'aac'
-                  ? sym.image_url
-                  : (signedUrls[String(sym.id)] || sym.image_url)}
+                src={getSymbolImgSrc(sym, signedUrls)}
                 alt={sym.label}
                 className="w-16 h-16 object-cover rounded mb-2"
                 style={{ background: '#E0E7EF' }}
