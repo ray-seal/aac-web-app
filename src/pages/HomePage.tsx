@@ -4,6 +4,8 @@ import { supabase } from '../supabaseClient'
 import { getSignedImageUrl } from '../utils/uploadImage'
 import { aacSymbols } from '../data/aac-symbols'
 
+const TAB_PREFS_KEY = 'aac_tab_prefs'
+
 function isOnline() {
   return window.navigator.onLine
 }
@@ -78,116 +80,31 @@ export default function HomePage() {
   const [panel, setPanel] = useState<HomeSchoolSymbol[]>([])
   const [isGuest, setIsGuest] = useState(false)
   const [loadingPrefs, setLoadingPrefs] = useState(false)
-  const [prefsError, setPrefsError] = useState("")
 
-  // Tab prefs effect with robust fallback and error logging
+  // Tab prefs effect: localStorage only, no Supabase
   useEffect(() => {
-    let unsub: any
-    let cancelled = false
-    async function fetchPrefsAndUser() {
-      setLoadingPrefs(true)
-      setPrefsError("")
-      try {
-        const { data: auth, error: authError } = await supabase.auth.getUser()
-        if (authError) console.error("Supabase auth error", authError)
-        if (!auth?.user) {
-          setIsGuest(true)
-          setUser(null)
-          setSymbols(guestSymbolsFromAac())
-          setTab('all')
-          setTabPrefs({ all_tab: true, home: false, school: false })
-          setLoadingPrefs(false)
-          return
-        }
-        setUser(auth.user)
-        setIsGuest(false)
-        // Try online first
-        if (navigator.onLine) {
-          const { data: prefs, error } = await supabase
-            .from('tab_prefs')
-            .select('*')
-            .eq('user_id', auth.user.id)
-            .maybeSingle()
-          if (error) {
-            console.error("Supabase tab_prefs error", error)
-            setPrefsError("Failed to load preferences from server.")
-          }
-          if (!cancelled) {
-            if (prefs) {
-              setTabPrefs({
-                all_tab: prefs.all_tab ?? true,
-                home: prefs.home ?? true,
-                school: prefs.school ?? true,
-              })
-              localStorage.setItem("tab_prefs", JSON.stringify(prefs))
-            } else {
-              setTabPrefs({ all_tab: true, home: true, school: true })
-              localStorage.setItem("tab_prefs", JSON.stringify({ all_tab: true, home: true, school: true }))
-            }
-            setLoadingPrefs(false)
-          }
-        } else {
-          const cached = localStorage.getItem("tab_prefs")
-          if (cached) setTabPrefs(JSON.parse(cached))
-          setLoadingPrefs(false)
-        }
-      } catch (e) {
-        console.error("Exception loading preferences", e)
-        setPrefsError("Could not load preferences. Try again or contact support.")
-        const cached = localStorage.getItem("tab_prefs")
-        if (cached) setTabPrefs(JSON.parse(cached))
-        setLoadingPrefs(false)
-      }
-    }
-    fetchPrefsAndUser()
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-        setUser(session.user)
-        setIsGuest(false)
-        setLoadingPrefs(true)
-        setPrefsError("")
-        try {
-          const { data: prefs, error } = await supabase
-            .from('tab_prefs')
-            .select('*')
-            .eq('user_id', session.user.id)
-            .maybeSingle()
-          if (error) {
-            console.error("Supabase tab_prefs error", error)
-            setPrefsError("Failed to load preferences from server.")
-          }
-          if (prefs) {
-            setTabPrefs({
-              all_tab: prefs.all_tab ?? true,
-              home: prefs.home ?? true,
-              school: prefs.school ?? true,
-            })
-            localStorage.setItem("tab_prefs", JSON.stringify(prefs))
-          } else {
-            setTabPrefs({ all_tab: true, home: true, school: true })
-            localStorage.setItem("tab_prefs", JSON.stringify({ all_tab: true, home: true, school: true }))
-          }
-        } catch (err) {
-          console.error("Exception loading preferences", err)
-          setPrefsError("Could not load preferences. Try again or contact support.")
-          const cached = localStorage.getItem("tab_prefs")
-          if (cached) setTabPrefs(JSON.parse(cached))
-        }
-        setLoadingPrefs(false)
-      } else {
+    setLoadingPrefs(true)
+    supabase.auth.getUser().then(({ data }) => {
+      if (!data.user) {
         setIsGuest(true)
         setUser(null)
         setSymbols(guestSymbolsFromAac())
         setTab('all')
         setTabPrefs({ all_tab: true, home: false, school: false })
         setLoadingPrefs(false)
+        return
       }
+      setUser(data.user)
+      setIsGuest(false)
+      const cached = localStorage.getItem(TAB_PREFS_KEY)
+      if (cached) {
+        setTabPrefs(JSON.parse(cached))
+      } else {
+        setTabPrefs({ all_tab: true, home: true, school: true })
+        localStorage.setItem(TAB_PREFS_KEY, JSON.stringify({ all_tab: true, home: true, school: true }))
+      }
+      setLoadingPrefs(false)
     })
-    unsub = listener?.subscription
-    return () => {
-      unsub?.unsubscribe()
-      cancelled = true
-    }
   }, [])
 
   useEffect(() => {
@@ -360,7 +277,6 @@ export default function HomePage() {
       {loadingPrefs ? (
         <div className="text-center text-gray-500 my-10">
           Loading preferences...
-          {prefsError && <div className="text-red-600 mt-2">{prefsError}</div>}
         </div>
       ) : (
         <>
