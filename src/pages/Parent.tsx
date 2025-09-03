@@ -6,6 +6,7 @@ import { uploadImage, getSignedImageUrl } from '../utils/uploadImage'
 const HOME_SCHOOL_KEY = 'aac_homeschool'
 const TAB_PREF_KEY = 'aac_tab_preferences'
 const OFFLINE_QUEUE_KEY = 'aac_homeschool_queue'
+const PIN_KEY = 'aac_parent_pin' // key for storing pin in localStorage
 
 function isOnline() {
   return window.navigator.onLine
@@ -56,6 +57,14 @@ function clearOfflineQueue() {
 }
 
 export default function Parent() {
+  // PIN logic
+  const [showPinPrompt, setShowPinPrompt] = useState(true)
+  const [pinInput, setPinInput] = useState('')
+  const [pinError, setPinError] = useState('')
+  const [pinSetMode, setPinSetMode] = useState(false)
+  const [pinConfirm, setPinConfirm] = useState('')
+
+  // rest of logic
   const [user, setUser] = useState<any>(null)
   const [symbols, setSymbols] = useState<HomeSchoolSymbol[]>([])
   const [signedUrls, setSignedUrls] = useState<{ [id: string]: string }>({})
@@ -66,7 +75,59 @@ export default function Parent() {
   const [error, setError] = useState('')
   const [tabPrefs, setTabPrefs] = useState<TabPrefs>(getTabPrefs())
 
+  // PIN check on mount
   useEffect(() => {
+    const storedPin = localStorage.getItem(PIN_KEY)
+    if (!storedPin) {
+      setPinSetMode(true)
+      setShowPinPrompt(true)
+    } else {
+      setShowPinPrompt(true)
+    }
+  }, [])
+
+  function handlePinSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    const storedPin = localStorage.getItem(PIN_KEY)
+    if (!storedPin) {
+      // Setting pin for first time
+      if (!pinInput || !pinConfirm) {
+        setPinError('Please enter and confirm your new PIN.')
+        return
+      }
+      if (pinInput !== pinConfirm) {
+        setPinError('PINs do not match.')
+        return
+      }
+      localStorage.setItem(PIN_KEY, pinInput)
+      setShowPinPrompt(false)
+      setPinInput('')
+      setPinConfirm('')
+      setPinError('')
+      setPinSetMode(false)
+    } else {
+      // Checking pin
+      if (pinInput === storedPin) {
+        setShowPinPrompt(false)
+        setPinInput('')
+        setPinError('')
+      } else {
+        setPinError('Incorrect PIN. Try again.')
+      }
+    }
+  }
+
+  function handlePinReset() {
+    localStorage.removeItem(PIN_KEY)
+    setPinSetMode(true)
+    setPinInput('')
+    setPinConfirm('')
+    setPinError('')
+    setShowPinPrompt(true)
+  }
+
+  useEffect(() => {
+    if (showPinPrompt) return
     supabase.auth.getUser().then(({ data }) => {
       if (data?.user) setUser(data.user)
     })
@@ -76,7 +137,7 @@ export default function Parent() {
     return () => {
       listener?.subscription.unsubscribe()
     }
-  }, [])
+  }, [showPinPrompt])
 
   useEffect(() => {
     if (!user) {
@@ -302,6 +363,51 @@ export default function Parent() {
     }
     // eslint-disable-next-line
   }, [tabPrefs])
+
+  // PIN prompt modal
+  if (showPinPrompt) {
+    return (
+      <div className="fixed inset-0 bg-gray-800 bg-opacity-60 flex items-center justify-center z-50">
+        <form onSubmit={handlePinSubmit} className="bg-white p-6 rounded-lg shadow-lg w-full max-w-xs text-center">
+          <h2 className="text-xl font-bold mb-4">
+            {pinSetMode ? 'Set a Parent PIN' : 'Enter Parent PIN'}
+          </h2>
+          <input
+            type="password"
+            value={pinInput}
+            onChange={e => setPinInput(e.target.value)}
+            placeholder="Enter PIN"
+            className="border rounded p-2 w-full mb-2"
+            maxLength={8}
+            autoFocus
+          />
+          {pinSetMode && (
+            <input
+              type="password"
+              value={pinConfirm}
+              onChange={e => setPinConfirm(e.target.value)}
+              placeholder="Confirm PIN"
+              className="border rounded p-2 w-full mb-2"
+              maxLength={8}
+            />
+          )}
+          {pinError && <div className="text-red-600 mb-2">{pinError}</div>}
+          <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded w-full mb-2">
+            {pinSetMode ? 'Set PIN' : 'Unlock'}
+          </button>
+          {!pinSetMode && (
+            <button
+              type="button"
+              className="text-blue-500 underline text-xs"
+              onClick={handlePinReset}
+            >
+              Forgot PIN? Reset
+            </button>
+          )}
+        </form>
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-4xl mx-auto mt-6 p-4 bg-white rounded shadow">
