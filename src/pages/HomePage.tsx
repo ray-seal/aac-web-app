@@ -19,7 +19,7 @@ type HomeSchoolSymbol = {
   school?: boolean
 }
 
-type TabPrefs = { all: boolean; home: boolean; school: boolean }
+type TabPrefs = { all_tab: boolean; home: boolean; school: boolean }
 
 // Convert AAC symbols to HomeSchoolSymbol for guest mode
 function guestSymbolsFromAac(): HomeSchoolSymbol[] {
@@ -39,7 +39,7 @@ export default function HomePage() {
   const [user, setUser] = useState<any>(null)
   const [symbols, setSymbols] = useState<HomeSchoolSymbol[]>([])
   const [signedUrls, setSignedUrls] = useState<{ [id: string]: string }>({})
-  const [tabPrefs, setTabPrefs] = useState<TabPrefs>({ all: true, home: true, school: true })
+  const [tabPrefs, setTabPrefs] = useState<TabPrefs>({ all_tab: true, home: true, school: true })
   const [panel, setPanel] = useState<HomeSchoolSymbol[]>([])
   const [isGuest, setIsGuest] = useState(false)
   const [loadingPrefs, setLoadingPrefs] = useState(false)
@@ -52,19 +52,19 @@ export default function HomePage() {
         setUser(data.user)
         setIsGuest(false)
         setLoadingPrefs(true)
-        const { data: prefs, error } = await supabase
+        const { data: prefs } = await supabase
           .from('tab_prefs')
           .select('*')
           .eq('user_id', data.user.id)
           .single()
         if (prefs) {
           setTabPrefs({
-            all: prefs.all ?? true,
+            all_tab: prefs.all_tab ?? true,
             home: prefs.home ?? true,
             school: prefs.school ?? true,
           })
         } else {
-          setTabPrefs({ all: true, home: true, school: true })
+          setTabPrefs({ all_tab: true, home: true, school: true })
         }
         setLoadingPrefs(false)
       } else {
@@ -72,7 +72,7 @@ export default function HomePage() {
         setUser(null)
         setSymbols(guestSymbolsFromAac())
         setTab('all')
-        setTabPrefs({ all: true, home: false, school: false })
+        setTabPrefs({ all_tab: true, home: false, school: false })
       }
     })
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
@@ -80,19 +80,19 @@ export default function HomePage() {
         setUser(session.user)
         setIsGuest(false)
         setLoadingPrefs(true)
-        const { data: prefs, error } = await supabase
+        const { data: prefs } = await supabase
           .from('tab_prefs')
           .select('*')
           .eq('user_id', session.user.id)
           .single()
         if (prefs) {
           setTabPrefs({
-            all: prefs.all ?? true,
+            all_tab: prefs.all_tab ?? true,
             home: prefs.home ?? true,
             school: prefs.school ?? true,
           })
         } else {
-          setTabPrefs({ all: true, home: true, school: true })
+          setTabPrefs({ all_tab: true, home: true, school: true })
         }
         setLoadingPrefs(false)
       } else {
@@ -100,7 +100,7 @@ export default function HomePage() {
         setUser(null)
         setSymbols(guestSymbolsFromAac())
         setTab('all')
-        setTabPrefs({ all: true, home: false, school: false })
+        setTabPrefs({ all_tab: true, home: false, school: false })
       }
     })
     unsub = listener?.subscription
@@ -158,7 +158,7 @@ export default function HomePage() {
   const enabledTabs = isGuest
     ? [{ key: 'all', label: 'All' }]
     : [
-        tabPrefs.all && { key: 'all', label: 'All' },
+        tabPrefs.all_tab && { key: 'all', label: 'All' },
         tabPrefs.home && { key: 'home', label: 'Home' },
         tabPrefs.school && { key: 'school', label: 'School' },
       ].filter(Boolean) as { key: 'all' | 'home' | 'school'; label: string }[]
