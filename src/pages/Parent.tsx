@@ -102,6 +102,7 @@ export default function Parent() {
   const [uploadFile, setUploadFile] = useState<File | null>(null)
   const [error, setError] = useState('')
   const [tabPrefs, setTabPrefs] = useState<TabPrefs>({ all_tab: true, home: true, school: true })
+  const [loadingPrefs, setLoadingPrefs] = useState(true)
 
   // PIN check on mount
   useEffect(() => {
@@ -159,7 +160,8 @@ export default function Parent() {
     supabase.auth.getUser().then(({ data }) => {
       setUser(data.user ?? null)
     })
-    // Tab prefs from localStorage only
+    // Tab prefs from localStorage only (robust, always set loadingPrefs false)
+    setLoadingPrefs(true);
     const cached = localStorage.getItem(TAB_PREFS_KEY);
     if (cached) {
       setTabPrefs(JSON.parse(cached));
@@ -167,6 +169,7 @@ export default function Parent() {
       setTabPrefs({ all_tab: true, home: true, school: true });
       localStorage.setItem(TAB_PREFS_KEY, JSON.stringify({ all_tab: true, home: true, school: true }));
     }
+    setLoadingPrefs(false);
   }, [showPinPrompt]);
 
   useEffect(() => {
@@ -430,6 +433,14 @@ export default function Parent() {
             </button>
           )}
         </form>
+      </div>
+    )
+  }
+
+  if (loadingPrefs) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div>Loading preferences...</div>
       </div>
     )
   }
