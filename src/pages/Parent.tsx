@@ -245,15 +245,15 @@ export default function Parent() {
     const path = await uploadImage(uploadFile, user.id)
     setUploading(false)
     if (!path) return
-    const { error } = await supabase
+    const { error: uploadError } = await supabase
       .from('homeschool')
       .insert([{ user_id: user.id, image_url: path, label: uploadLabel, type: 'upload', order, home: false, school: false }])
-    if (!error) {
+    if (!uploadError) {
       setUploadLabel('')
       setUploadFile(null)
       fetchSymbols()
     } else {
-      setError(error.message)
+      setError(uploadError.message)
     }
   }
 
@@ -368,7 +368,7 @@ export default function Parent() {
     const updated = { ...tabPrefs, [tabKey]: !tabPrefs[tabKey] }
     setTabPrefs(updated)
     // Upsert to supabase
-    const { error } = await supabase
+    await supabase
       .from('tab_prefs')
       .upsert([
         {
