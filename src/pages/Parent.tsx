@@ -379,7 +379,6 @@ export default function Parent() {
           updated_at: new Date().toISOString()
         }
       ])
-    // Optionally handle error UI
   }
 
   // Filtering by tab
@@ -468,14 +467,18 @@ export default function Parent() {
         ? <div className="text-center text-gray-500 my-6">Loading preferences...</div>
         : (
           <div className="flex flex-row justify-center gap-4 mb-4">
-            {(['all_tab', 'home', 'school'] as (keyof TabPrefs)[]).map(tabKey => (
-              <label key={tabKey} className="flex items-center gap-1 text-sm">
+            {[
+              { key: 'all_tab', label: 'All' },
+              { key: 'home', label: 'Home' },
+              { key: 'school', label: 'School' },
+            ].map(({ key, label }) => (
+              <label key={key} className="flex items-center gap-1 text-sm">
                 <input
                   type="checkbox"
-                  checked={tabPrefs[tabKey]}
-                  onChange={() => handleTabPrefChange(tabKey)}
+                  checked={tabPrefs[key as keyof TabPrefs]}
+                  onChange={() => handleTabPrefChange(key as keyof TabPrefs)}
                 />
-                Show {tabKey === 'all_tab' ? 'All' : tabKey.charAt(0).toUpperCase() + tabKey.slice(1)} Tab
+                Show {label} Tab
               </label>
             ))}
           </div>
