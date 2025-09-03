@@ -47,7 +47,6 @@ function clearOfflineQueue() {
   localStorage.removeItem(OFFLINE_QUEUE_KEY)
 }
 
-// Caches user-uploaded images as data URLs in localStorage for offline use
 async function cacheUserImages(symbols: HomeSchoolSymbol[], signedUrls: { [id: string]: string }) {
   const cache: { [id: string]: string } = JSON.parse(localStorage.getItem('user_image_cache') || '{}');
   let updated = false;
@@ -66,9 +65,7 @@ async function cacheUserImages(symbols: HomeSchoolSymbol[], signedUrls: { [id: s
           });
           cache[sym.id] = dataUrl;
           updated = true;
-        } catch (err) {
-          // Could not fetch/couldn't cache
-        }
+        } catch (err) {}
       }
     }
   }
@@ -152,55 +149,96 @@ export default function Parent() {
     setShowPinPrompt(true)
   }
 
-  // Fetch user and tab prefs
+  // Fetch user and tab prefs -- robust fallback logic
   useEffect(() => {
-    if (showPinPrompt) return
-    supabase.auth.getUser().then(async ({ data }) => {
-      if (data?.user) {
-        setUser(data.user)
-        setPrefsLoading(true)
-        const { data: prefs } = await supabase
-          .from('tab_prefs')
-          .select('*')
-          .eq('user_id', data.user.id)
-          .single()
-        if (prefs) {
-          setTabPrefs({
-            all_tab: prefs.all_tab ?? true,
-            home: prefs.home ?? true,
-            school: prefs.school ?? true,
-          })
-        } else {
-          setTabPrefs({ all_tab: true, home: true, school: true })
+    if (showPinPrompt) return;
+    let cancelled = false;
+    async function fetchPrefs() {
+      setPrefsLoading(true);
+      try {
+        const { data: auth } = await supabase.auth.getUser();
+        if (!auth?.user) {
+          setPrefsLoading(false);
+          return;
         }
-        setPrefsLoading(false)
+        setUser(auth.user);
+
+        // Try to load from Supabase if online
+        if (navigator.onLine) {
+          const { data: prefs, error } = await supabase
+            .from('tab_prefs')
+            .select('*')
+            .eq('user_id', auth.user.id)
+            .single();
+
+          if (!cancelled) {
+            if (prefs) {
+              setTabPrefs({
+                all_tab: prefs.all_tab ?? true,
+                home: prefs.home ?? true,
+                school: prefs.school ?? true,
+              });
+              localStorage.setItem("tab_prefs", JSON.stringify(prefs));
+            } else if (!error) {
+              setTabPrefs({ all_tab: true, home: true, school: true });
+              localStorage.setItem("tab_prefs", JSON.stringify({ all_tab: true, home: true, school: true }));
+            } else {
+              // error (e.g. network): fallback
+              const cached = localStorage.getItem("tab_prefs");
+              if (cached) setTabPrefs(JSON.parse(cached));
+            }
+            setPrefsLoading(false);
+          }
+        } else {
+          // Offline: use cached
+          const cached = localStorage.getItem("tab_prefs");
+          if (cached) setTabPrefs(JSON.parse(cached));
+          setPrefsLoading(false);
+        }
+      } catch (e) {
+        // Any error: fallback to localStorage
+        const cached = localStorage.getItem("tab_prefs");
+        if (cached) setTabPrefs(JSON.parse(cached));
+        setPrefsLoading(false);
       }
-    })
+    }
+    fetchPrefs();
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
         setUser(session.user)
         setPrefsLoading(true)
-        const { data: prefs } = await supabase
-          .from('tab_prefs')
-          .select('*')
-          .eq('user_id', session.user.id)
-          .single()
-        if (prefs) {
-          setTabPrefs({
-            all_tab: prefs.all_tab ?? true,
-            home: prefs.home ?? true,
-            school: prefs.school ?? true,
-          })
-        } else {
-          setTabPrefs({ all_tab: true, home: true, school: true })
+        try {
+          const { data: prefs, error } = await supabase
+            .from('tab_prefs')
+            .select('*')
+            .eq('user_id', session.user.id)
+            .single()
+          if (prefs) {
+            setTabPrefs({
+              all_tab: prefs.all_tab ?? true,
+              home: prefs.home ?? true,
+              school: prefs.school ?? true,
+            })
+            localStorage.setItem("tab_prefs", JSON.stringify(prefs))
+          } else if (!error) {
+            setTabPrefs({ all_tab: true, home: true, school: true })
+            localStorage.setItem("tab_prefs", JSON.stringify({ all_tab: true, home: true, school: true }))
+          } else {
+            const cached = localStorage.getItem("tab_prefs")
+            if (cached) setTabPrefs(JSON.parse(cached))
+          }
+        } catch {
+          const cached = localStorage.getItem("tab_prefs")
+          if (cached) setTabPrefs(JSON.parse(cached))
         }
         setPrefsLoading(false)
       }
     })
     return () => {
       listener?.subscription.unsubscribe()
+      cancelled = true
     }
-  }, [showPinPrompt])
+  }, [showPinPrompt]);
 
   useEffect(() => {
     if (!user) {
@@ -284,7 +322,6 @@ export default function Parent() {
     tabPrefs.school && { key: 'school', label: 'School' },
   ].filter(Boolean) as { key: 'all' | 'home' | 'school'; label: string }[]
 
-  // Set tab to first enabled if current one disabled
   useEffect(() => {
     if (!(tab === 'all' && tabPrefs.all_tab) &&
         !(tab === 'home' && tabPrefs.home) &&
@@ -294,7 +331,6 @@ export default function Parent() {
     }
   }, [tabPrefs, enabledTabs])
 
-  // Filtering by tab
   const filtered = tab === 'all'
     ? symbols
     : tab === 'home'
@@ -336,7 +372,6 @@ export default function Parent() {
     }
   }
 
-  // Toggle for uploads after upload
   async function handleUploadToggleHomeSchool(sym: HomeSchoolSymbol, home: boolean, school: boolean) {
     const updated = symbols.map(s =>
       s.id === sym.id ? { ...s, home, school } : s
@@ -349,7 +384,6 @@ export default function Parent() {
     }
   }
 
-  // Upload new image logic
   async function handleUploadSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
@@ -397,7 +431,6 @@ export default function Parent() {
     }
   }
 
-  // Remove symbol
   async function handleRemoveSymbol(id: number) {
     const updated = symbols.filter(f => Number(f.id) !== Number(id))
     setSymbols(updated)
@@ -460,7 +493,6 @@ export default function Parent() {
     return () => window.removeEventListener('online', syncOfflineQueue)
   }, [user, symbols])
 
-  // PIN prompt modal
   if (showPinPrompt) {
     return (
       <div className="fixed inset-0 bg-gray-800 bg-opacity-60 flex items-center justify-center z-50">
@@ -550,7 +582,6 @@ export default function Parent() {
           </button>
         ))}
       </div>
-      {/* Upload new symbol */}
       <div className="mb-8">
         <h3 className="font-bold mb-2">Upload new favourite</h3>
         <form onSubmit={handleUploadSubmit} className="flex gap-2 items-end flex-wrap">
@@ -580,7 +611,6 @@ export default function Parent() {
         </form>
         {error && <div className="text-red-600 mt-2">{error}</div>}
       </div>
-      {/* Home/School checkboxes for AAC */}
       <div className="mb-4 flex gap-2 flex-wrap">
         {aacSymbols.map(sym => {
           const exist = symbols.find(s => s.label === sym.text && s.type === 'aac')
@@ -621,7 +651,6 @@ export default function Parent() {
           )
         })}
       </div>
-      {/* Home/School checkboxes for uploads */}
       <div className="mb-4 flex gap-2 flex-wrap">
         {symbols
           .filter(s => s.type === 'upload')
