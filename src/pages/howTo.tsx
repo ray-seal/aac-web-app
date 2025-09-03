@@ -86,7 +86,7 @@ In your parent tab you can use the buttons at the top to decide which tabs to se
 	</figcaption>
 <br />
 	<br />
-<p>Now your main screen should load automatically to your favourites and you are ready to start using the app.
+<p>Now your main screen should load automatically to your selected symbols and you are ready to start using the app.
 </p>
 </li>
         </ul>
