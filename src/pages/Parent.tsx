@@ -4,8 +4,8 @@ import { aacSymbols, AacSymbol } from '../data/aac-symbols'
 import { uploadImage, getSignedImageUrl } from '../utils/uploadImage'
 
 const HOME_SCHOOL_KEY = 'aac_homeschool'
-const OFFLINE_QUEUE_KEY = 'aac_homeschool_queue'
 const TAB_PREF_KEY = 'aac_tab_preferences'
+const OFFLINE_QUEUE_KEY = 'aac_homeschool_queue'
 
 function isOnline() {
   return window.navigator.onLine
@@ -37,6 +37,22 @@ function getTabPrefs(): TabPrefs {
   } catch {
     return { all: true, home: true, school: true }
   }
+}
+
+function addToOfflineQueue(action: OfflineAction) {
+  const queue: OfflineAction[] = JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]')
+  queue.push(action)
+  localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue))
+}
+function getOfflineQueue(): OfflineAction[] {
+  try {
+    return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]')
+  } catch {
+    return []
+  }
+}
+function clearOfflineQueue() {
+  localStorage.removeItem(OFFLINE_QUEUE_KEY)
 }
 
 export default function Parent() {
