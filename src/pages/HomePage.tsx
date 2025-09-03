@@ -107,7 +107,6 @@ export default function HomePage() {
       const first = enabledTabs[0]?.key || 'all'
       setTab(first)
     }
-    // eslint-disable-next-line
   }, [tabPrefs])
 
   // Filtered symbols by tab
@@ -117,7 +116,9 @@ export default function HomePage() {
       ? symbols.filter(s => s.home)
       : symbols.filter(s => s.school)
 
+  // Communication panel logic with no duplicate symbols
   function handleSymbolClick(sym: HomeSchoolSymbol) {
+    if (panel.some(s => s.id === sym.id)) return
     setPanel(prev => [...prev, sym])
   }
 
@@ -143,22 +144,26 @@ export default function HomePage() {
       return <div className="p-4 text-center text-gray-500">No symbols yet.</div>
     return (
       <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4">
-        {filtered.map((sym: any) => (
-          <button
-            key={sym.id}
-            className="border rounded p-2 flex flex-col items-center bg-gray-50 hover:bg-blue-50 transition"
-            onClick={() => handleSymbolClick(sym)}
-            aria-label={`Add ${sym.label} to communication panel`}
-            type="button"
-          >
-            <img
-              src={sym.type === 'aac' ? sym.image_url : (signedUrls[String(sym.id)] || sym.image_url)}
-              alt={sym.label}
-              className="w-16 h-16 object-cover rounded mb-2"
-            />
-            <div className="text-center text-xs font-medium mb-1">{sym.label}</div>
-          </button>
-        ))}
+        {filtered.map((sym: any) => {
+          const isSelected = panel.some(s => s.id === sym.id)
+          return (
+            <button
+              key={sym.id}
+              className={`border rounded p-2 flex flex-col items-center bg-gray-50 transition ${isSelected ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-50'}`}
+              onClick={() => handleSymbolClick(sym)}
+              aria-label={`Add ${sym.label} to communication panel`}
+              type="button"
+              disabled={isSelected}
+            >
+              <img
+                src={sym.type === 'aac' ? sym.image_url : (signedUrls[String(sym.id)] || sym.image_url)}
+                alt={sym.label}
+                className="w-16 h-16 object-cover rounded mb-2"
+              />
+              <div className="text-center text-xs font-medium mb-1">{sym.label}</div>
+            </button>
+          )
+        })}
       </div>
     )
   }
