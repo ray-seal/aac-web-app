@@ -4,9 +4,6 @@ import { supabase } from '../supabaseClient'
 import { getSignedImageUrl } from '../utils/uploadImage'
 import { aacSymbols } from '../data/aac-symbols'
 
-const HOME_SCHOOL_KEY = 'aac_homeschool'
-const TAB_PREF_KEY = 'aac_tab_preferences'
-
 function isOnline() {
   return window.navigator.onLine
 }
@@ -23,15 +20,6 @@ type HomeSchoolSymbol = {
 }
 
 type TabPrefs = { all: boolean; home: boolean; school: boolean }
-
-function getTabPrefs(): TabPrefs {
-  try {
-    return JSON.parse(localStorage.getItem(TAB_PREF_KEY) || '')
-      ?? { all: true, home: true, school: true }
-  } catch {
-    return { all: true, home: true, school: true }
-  }
-}
 
 // Convert AAC symbols to HomeSchoolSymbol for guest mode
 function guestSymbolsFromAac(): HomeSchoolSymbol[] {
@@ -51,17 +39,34 @@ export default function HomePage() {
   const [user, setUser] = useState<any>(null)
   const [symbols, setSymbols] = useState<HomeSchoolSymbol[]>([])
   const [signedUrls, setSignedUrls] = useState<{ [id: string]: string }>({})
-  const [tabPrefs, setTabPrefs] = useState<TabPrefs>(getTabPrefs())
+  const [tabPrefs, setTabPrefs] = useState<TabPrefs>({ all: true, home: true, school: true })
   const [panel, setPanel] = useState<HomeSchoolSymbol[]>([])
   const [isGuest, setIsGuest] = useState(false)
+  const [loadingPrefs, setLoadingPrefs] = useState(false)
 
-  // On mount, check user
+  // On mount, check user and fetch tab prefs if logged in
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
+    let unsub: any
+    supabase.auth.getUser().then(async ({ data }) => {
       if (data?.user) {
         setUser(data.user)
         setIsGuest(false)
-        setTabPrefs(getTabPrefs()) // restore prefs from parent
+        setLoadingPrefs(true)
+        const { data: prefs, error } = await supabase
+          .from('tab_prefs')
+          .select('*')
+          .eq('user_id', data.user.id)
+          .single()
+        if (prefs) {
+          setTabPrefs({
+            all: prefs.all ?? true,
+            home: prefs.home ?? true,
+            school: prefs.school ?? true,
+          })
+        } else {
+          setTabPrefs({ all: true, home: true, school: true })
+        }
+        setLoadingPrefs(false)
       } else {
         setIsGuest(true)
         setUser(null)
@@ -70,11 +75,26 @@ export default function HomePage() {
         setTabPrefs({ all: true, home: false, school: false })
       }
     })
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
         setUser(session.user)
         setIsGuest(false)
-        setTabPrefs(getTabPrefs())
+        setLoadingPrefs(true)
+        const { data: prefs, error } = await supabase
+          .from('tab_prefs')
+          .select('*')
+          .eq('user_id', session.user.id)
+          .single()
+        if (prefs) {
+          setTabPrefs({
+            all: prefs.all ?? true,
+            home: prefs.home ?? true,
+            school: prefs.school ?? true,
+          })
+        } else {
+          setTabPrefs({ all: true, home: true, school: true })
+        }
+        setLoadingPrefs(false)
       } else {
         setIsGuest(true)
         setUser(null)
@@ -83,10 +103,10 @@ export default function HomePage() {
         setTabPrefs({ all: true, home: false, school: false })
       }
     })
+    unsub = listener?.subscription
     return () => {
-      listener?.subscription.unsubscribe()
+      unsub?.unsubscribe()
     }
-    // eslint-disable-next-line
   }, [])
 
   // If user logs in, fetch their symbols
@@ -98,7 +118,6 @@ export default function HomePage() {
       return
     }
     fetchSymbols()
-    // eslint-disable-next-line
   }, [user, isGuest])
 
   async function fetchSymbols() {
@@ -109,9 +128,9 @@ export default function HomePage() {
         .eq('user_id', user.id)
         .order('order', { ascending: true })
       setSymbols(data ?? [])
-      localStorage.setItem(HOME_SCHOOL_KEY, JSON.stringify(data ?? []))
+      localStorage.setItem('aac_homeschool', JSON.stringify(data ?? []))
     } else {
-      const offline = localStorage.getItem(HOME_SCHOOL_KEY)
+      const offline = localStorage.getItem('aac_homeschool')
       setSymbols(offline ? JSON.parse(offline) : [])
     }
   }
@@ -144,13 +163,11 @@ export default function HomePage() {
         tabPrefs.school && { key: 'school', label: 'School' },
       ].filter(Boolean) as { key: 'all' | 'home' | 'school'; label: string }[]
 
-  // Set tab to first enabled if current one disabled
   useEffect(() => {
     if (!enabledTabs.find(t => t.key === tab)) {
       const first = enabledTabs[0]?.key || 'all'
       setTab(first as 'all' | 'home' | 'school')
     }
-    // eslint-disable-next-line
   }, [tabPrefs, enabledTabs])
 
   // Filtered symbols by tab
@@ -263,20 +280,26 @@ export default function HomePage() {
       <div className="mb-4 flex justify-end">
         <Link to="/parent" className="text-blue-500 underline">Parent</Link>
       </div>
-      {renderPanel()}
-      <div className="flex gap-4 mb-6 justify-center">
-        {enabledTabs.map(t => (
-          <button
-            key={t.key}
-            className={tab === t.key ? 'font-bold underline' : ''}
-            onClick={() => setTab(t.key as 'all' | 'home' | 'school')}
-            disabled={isGuest && t.key !== 'all'}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-      {renderSymbolsGrid()}
+      {loadingPrefs ? (
+        <div className="text-center text-gray-500 my-10">Loading preferences...</div>
+      ) : (
+        <>
+          {renderPanel()}
+          <div className="flex gap-4 mb-6 justify-center">
+            {enabledTabs.map(t => (
+              <button
+                key={t.key}
+                className={tab === t.key ? 'font-bold underline' : ''}
+                onClick={() => setTab(t.key as 'all' | 'home' | 'school')}
+                disabled={isGuest && t.key !== 'all'}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          {renderSymbolsGrid()}
+        </>
+      )}
     </div>
   )
 }
