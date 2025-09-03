@@ -34,6 +34,43 @@ function guestSymbolsFromAac(): HomeSchoolSymbol[] {
   }))
 }
 
+// Caches user-uploaded images as data URLs in localStorage for offline use
+async function cacheUserImages(symbols: HomeSchoolSymbol[], signedUrls: { [id: string]: string }) {
+  const cache: { [id: string]: string } = JSON.parse(localStorage.getItem('user_image_cache') || '{}');
+  let updated = false;
+  for (const sym of symbols) {
+    if (sym.type === 'upload' && sym.image_url) {
+      const imgUrl = signedUrls[String(sym.id)] || sym.image_url;
+      if (!cache[sym.id]) {
+        try {
+          const response = await fetch(imgUrl);
+          const blob = await response.blob();
+          const reader = new FileReader();
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+          cache[sym.id] = dataUrl;
+          updated = true;
+        } catch (err) {
+          // Could not fetch/couldn't cache
+        }
+      }
+    }
+  }
+  if (updated) {
+    localStorage.setItem('user_image_cache', JSON.stringify(cache));
+  }
+}
+
+function getSymbolImgSrc(sym: HomeSchoolSymbol, signedUrls: { [id: string]: string }) {
+  if (sym.type === 'aac') return sym.image_url;
+  const cache = JSON.parse(localStorage.getItem('user_image_cache') || '{}');
+  if (!window.navigator.onLine && cache[sym.id]) return cache[sym.id];
+  return signedUrls[String(sym.id)] || sym.image_url;
+}
+
 export default function HomePage() {
   const [tab, setTab] = useState<'all' | 'home' | 'school'>('all')
   const [user, setUser] = useState<any>(null)
@@ -135,9 +172,9 @@ export default function HomePage() {
     }
   }
 
-  // Signed URLs for uploads (user mode only)
+  // Signed URLs for uploads (user mode only) and cache images when online
   useEffect(() => {
-    async function loadSignedUrls() {
+    async function loadSignedUrlsAndCache() {
       const uploads = symbols.filter(f => f.type !== 'aac')
       const urlMap: { [id: string]: string } = {}
       await Promise.all(
@@ -146,9 +183,12 @@ export default function HomePage() {
         })
       )
       setSignedUrls(urlMap)
+      if (isOnline()) {
+        await cacheUserImages(symbols, urlMap)
+      }
     }
     if (!isGuest && symbols.length > 0) {
-      loadSignedUrls()
+      loadSignedUrlsAndCache()
     } else {
       setSignedUrls({})
     }
@@ -217,7 +257,7 @@ export default function HomePage() {
               disabled={isSelected}
             >
               <img
-                src={sym.type === 'aac' ? sym.image_url : (signedUrls[String(sym.id)] || sym.image_url)}
+                src={getSymbolImgSrc(sym, signedUrls)}
                 alt={sym.label}
                 className="w-16 h-16 object-cover rounded mb-2"
               />
@@ -245,7 +285,7 @@ export default function HomePage() {
                 onClick={() => handlePanelRemove(idx)}
               >×</button>
               <img
-                src={sym.type === 'aac' ? sym.image_url : (signedUrls[String(sym.id)] || sym.image_url)}
+                src={getSymbolImgSrc(sym, signedUrls)}
                 alt={sym.label}
                 className="w-10 h-10 object-cover rounded"
               />
