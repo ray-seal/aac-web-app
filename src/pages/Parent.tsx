@@ -6,6 +6,7 @@ import { uploadImage, getSignedImageUrl } from '../utils/uploadImage'
 const HOME_SCHOOL_KEY = 'aac_homeschool'
 const OFFLINE_QUEUE_KEY = 'aac_homeschool_queue'
 const PIN_KEY = 'aac_parent_pin'
+const TAB_PREFS_KEY = 'aac_tab_prefs'
 
 type HomeSchoolSymbol = {
   id: string | number
@@ -23,7 +24,6 @@ type OfflineAction =
   | { type: 'add'; data: HomeSchoolSymbol }
   | { type: 'remove'; id: number }
   | { type: 'update'; id: number; data: Partial<HomeSchoolSymbol> }
-  | { type: 'tab_prefs'; data: { user_id: string, all_tab: boolean, home: boolean, school: boolean } }
 
 type TabPrefs = { all_tab: boolean; home: boolean; school: boolean }
 
@@ -36,6 +36,7 @@ function addToOfflineQueue(action: OfflineAction) {
   queue.push(action)
   localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue))
 }
+
 function getOfflineQueue(): OfflineAction[] {
   try {
     return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]')
@@ -43,6 +44,7 @@ function getOfflineQueue(): OfflineAction[] {
     return []
   }
 }
+
 function clearOfflineQueue() {
   localStorage.removeItem(OFFLINE_QUEUE_KEY)
 }
@@ -100,8 +102,6 @@ export default function Parent() {
   const [uploadFile, setUploadFile] = useState<File | null>(null)
   const [error, setError] = useState('')
   const [tabPrefs, setTabPrefs] = useState<TabPrefs>({ all_tab: true, home: true, school: true })
-  const [prefsLoading, setPrefsLoading] = useState(false)
-  const [prefsError, setPrefsError] = useState("")
 
   // PIN check on mount
   useEffect(() => {
@@ -152,98 +152,20 @@ export default function Parent() {
     setShowPinPrompt(true)
   }
 
-  // Fetch user and tab prefs -- robust fallback logic
+  // Fetch user and tab prefs from localStorage only (no Supabase)
   useEffect(() => {
     if (showPinPrompt) return;
-    let cancelled = false;
-    async function fetchPrefs() {
-      setPrefsLoading(true)
-      setPrefsError("")
-      try {
-        const { data: auth, error: authError } = await supabase.auth.getUser();
-        if (authError) console.error("Supabase auth error", authError)
-        if (!auth?.user) {
-          setPrefsLoading(false);
-          return;
-        }
-        setUser(auth.user);
-
-        if (navigator.onLine) {
-          const { data: prefs, error } = await supabase
-            .from('tab_prefs')
-            .select('*')
-            .eq('user_id', auth.user.id)
-            .maybeSingle();
-          if (error) {
-            console.error("Supabase tab_prefs error", error)
-            setPrefsError("Failed to load preferences from server.")
-          }
-          if (!cancelled) {
-            if (prefs) {
-              setTabPrefs({
-                all_tab: prefs.all_tab ?? true,
-                home: prefs.home ?? true,
-                school: prefs.school ?? true,
-              });
-              localStorage.setItem("tab_prefs", JSON.stringify(prefs));
-            } else {
-              setTabPrefs({ all_tab: true, home: true, school: true });
-              localStorage.setItem("tab_prefs", JSON.stringify({ all_tab: true, home: true, school: true }));
-            }
-            setPrefsLoading(false);
-          }
-        } else {
-          const cached = localStorage.getItem("tab_prefs");
-          if (cached) setTabPrefs(JSON.parse(cached));
-          setPrefsLoading(false);
-        }
-      } catch (e) {
-        console.error("Exception loading preferences", e)
-        setPrefsError("Could not load preferences. Try again or contact support.")
-        const cached = localStorage.getItem("tab_prefs");
-        if (cached) setTabPrefs(JSON.parse(cached));
-        setPrefsLoading(false);
-      }
-    }
-    fetchPrefs();
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-        setUser(session.user)
-        setPrefsLoading(true)
-        setPrefsError("")
-        try {
-          const { data: prefs, error } = await supabase
-            .from('tab_prefs')
-            .select('*')
-            .eq('user_id', session.user.id)
-            .maybeSingle()
-          if (error) {
-            console.error("Supabase tab_prefs error", error)
-            setPrefsError("Failed to load preferences from server.")
-          }
-          if (prefs) {
-            setTabPrefs({
-              all_tab: prefs.all_tab ?? true,
-              home: prefs.home ?? true,
-              school: prefs.school ?? true,
-            })
-            localStorage.setItem("tab_prefs", JSON.stringify(prefs))
-          } else {
-            setTabPrefs({ all_tab: true, home: true, school: true })
-            localStorage.setItem("tab_prefs", JSON.stringify({ all_tab: true, home: true, school: true }))
-          }
-        } catch (err) {
-          console.error("Exception loading preferences", err)
-          setPrefsError("Could not load preferences. Try again or contact support.")
-          const cached = localStorage.getItem("tab_prefs")
-          if (cached) setTabPrefs(JSON.parse(cached))
-        }
-        setPrefsLoading(false)
-      }
+    // Auth
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data.user ?? null)
     })
-    return () => {
-      listener?.subscription.unsubscribe()
-      cancelled = true
+    // Tab prefs from localStorage only
+    const cached = localStorage.getItem(TAB_PREFS_KEY);
+    if (cached) {
+      setTabPrefs(JSON.parse(cached));
+    } else {
+      setTabPrefs({ all_tab: true, home: true, school: true });
+      localStorage.setItem(TAB_PREFS_KEY, JSON.stringify({ all_tab: true, home: true, school: true }));
     }
   }, [showPinPrompt]);
 
@@ -292,34 +214,11 @@ export default function Parent() {
     }
   }, [symbols])
 
-  // Tab preference toggles
-  async function handleTabPrefChange(tabKey: keyof TabPrefs) {
-    if (!user) return
+  // Tab preference toggles (local only)
+  function handleTabPrefChange(tabKey: keyof TabPrefs) {
     const updated = { ...tabPrefs, [tabKey]: !tabPrefs[tabKey] }
     setTabPrefs(updated)
-    if (isOnline()) {
-      await supabase
-        .from('tab_prefs')
-        .upsert([
-          {
-            user_id: user.id,
-            all_tab: updated.all_tab,
-            home: updated.home,
-            school: updated.school,
-            updated_at: new Date().toISOString()
-          }
-        ])
-    } else {
-      addToOfflineQueue({
-        type: 'tab_prefs',
-        data: {
-          user_id: user.id,
-          all_tab: updated.all_tab,
-          home: updated.home,
-          school: updated.school
-        }
-      })
-    }
+    localStorage.setItem(TAB_PREFS_KEY, JSON.stringify(updated))
   }
 
   const enabledTabs = [
@@ -364,6 +263,7 @@ export default function Parent() {
       } else {
         addToOfflineQueue({ type: 'add', data: newSym })
       }
+      localStorage.setItem(HOME_SCHOOL_KEY, JSON.stringify([...symbols, newSym]))
     } else {
       const updated = symbols.map(s =>
         s.id === exists.id ? { ...s, home, school } : s
@@ -374,6 +274,7 @@ export default function Parent() {
       } else {
         addToOfflineQueue({ type: 'update', id: exists.id as number, data: { home, school } })
       }
+      localStorage.setItem(HOME_SCHOOL_KEY, JSON.stringify(updated))
     }
   }
 
@@ -387,6 +288,7 @@ export default function Parent() {
     } else {
       addToOfflineQueue({ type: 'update', id: sym.id as number, data: { home, school } })
     }
+    localStorage.setItem(HOME_SCHOOL_KEY, JSON.stringify(updated))
   }
 
   async function handleUploadSubmit(e: React.FormEvent) {
@@ -444,6 +346,7 @@ export default function Parent() {
     } else {
       addToOfflineQueue({ type: 'remove', id })
     }
+    localStorage.setItem(HOME_SCHOOL_KEY, JSON.stringify(updated))
   }
 
   useEffect(() => {
@@ -476,16 +379,6 @@ export default function Parent() {
           await supabase.from('homeschool').delete().eq('id', action.id)
         } else if (action.type === 'update') {
           await supabase.from('homeschool').update(action.data).eq('id', action.id)
-        } else if (action.type === 'tab_prefs') {
-          await supabase.from('tab_prefs').upsert([
-            {
-              user_id: action.data.user_id,
-              all_tab: action.data.all_tab,
-              home: action.data.home,
-              school: action.data.school,
-              updated_at: new Date().toISOString()
-            }
-          ])
         }
       })).then(() => {
         clearOfflineQueue()
@@ -554,30 +447,22 @@ export default function Parent() {
       <div className="mb-4 text-center">
         <span>You are signed in as <span className="font-mono">{user?.email}</span></span>
       </div>
-      {prefsLoading
-        ? <div className="text-center text-gray-500 my-6">
-            Loading preferences...
-            {prefsError && <div className="text-red-600 mt-2">{prefsError}</div>}
-          </div>
-        : (
-          <div className="flex flex-row justify-center gap-4 mb-4">
-            {[
-              { key: 'all_tab', label: 'All' },
-              { key: 'home', label: 'Home' },
-              { key: 'school', label: 'School' },
-            ].map(({ key, label }) => (
-              <label key={key} className="flex items-center gap-1 text-sm">
-                <input
-                  type="checkbox"
-                  checked={tabPrefs[key as keyof TabPrefs]}
-                  onChange={() => handleTabPrefChange(key as keyof TabPrefs)}
-                />
-                Show {label} Tab
-              </label>
-            ))}
-          </div>
-        )
-      }
+      <div className="flex flex-row justify-center gap-4 mb-4">
+        {[
+          { key: 'all_tab', label: 'All' },
+          { key: 'home', label: 'Home' },
+          { key: 'school', label: 'School' },
+        ].map(({ key, label }) => (
+          <label key={key} className="flex items-center gap-1 text-sm">
+            <input
+              type="checkbox"
+              checked={tabPrefs[key as keyof TabPrefs]}
+              onChange={() => handleTabPrefChange(key as keyof TabPrefs)}
+            />
+            Show {label} Tab
+          </label>
+        ))}
+      </div>
       <div className="flex gap-4 mb-4 justify-center">
         {enabledTabs.map(t => (
           <button
