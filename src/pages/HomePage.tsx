@@ -61,6 +61,7 @@ export default function HomePage() {
       if (data?.user) {
         setUser(data.user)
         setIsGuest(false)
+        setTabPrefs(getTabPrefs()) // restore prefs from parent
       } else {
         setIsGuest(true)
         setUser(null)
@@ -73,6 +74,7 @@ export default function HomePage() {
       if (session?.user) {
         setUser(session.user)
         setIsGuest(false)
+        setTabPrefs(getTabPrefs())
       } else {
         setIsGuest(true)
         setUser(null)
