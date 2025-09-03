@@ -79,9 +79,9 @@ export default function HomePage() {
   const [tabPrefs, setTabPrefs] = useState<TabPrefs>({ all_tab: true, home: true, school: true })
   const [panel, setPanel] = useState<HomeSchoolSymbol[]>([])
   const [isGuest, setIsGuest] = useState(false)
-  const [loadingPrefs, setLoadingPrefs] = useState(false)
+  const [loadingPrefs, setLoadingPrefs] = useState(true)
 
-  // Tab prefs effect: localStorage only, no Supabase
+  // Tab prefs effect: localStorage only, no Supabase, always set loadingPrefs false
   useEffect(() => {
     setLoadingPrefs(true)
     supabase.auth.getUser().then(({ data }) => {
@@ -269,33 +269,33 @@ export default function HomePage() {
     )
   }
 
+  if (loadingPrefs) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div>Loading preferences...</div>
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-4xl mx-auto mt-10 p-4 bg-white rounded shadow">
       <div className="mb-4 flex justify-end">
         <Link to="/parent" className="text-blue-500 underline">Parent</Link>
       </div>
-      {loadingPrefs ? (
-        <div className="text-center text-gray-500 my-10">
-          Loading preferences...
-        </div>
-      ) : (
-        <>
-          {renderPanel()}
-          <div className="flex gap-4 mb-6 justify-center">
-            {enabledTabs.map(t => (
-              <button
-                key={t.key}
-                className={tab === t.key ? 'font-bold underline' : ''}
-                onClick={() => setTab(t.key as 'all' | 'home' | 'school')}
-                disabled={isGuest && t.key !== 'all'}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-          {renderSymbolsGrid()}
-        </>
-      )}
+      {renderPanel()}
+      <div className="flex gap-4 mb-6 justify-center">
+        {enabledTabs.map(t => (
+          <button
+            key={t.key}
+            className={tab === t.key ? 'font-bold underline' : ''}
+            onClick={() => setTab(t.key as 'all' | 'home' | 'school')}
+            disabled={isGuest && t.key !== 'all'}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {renderSymbolsGrid()}
     </div>
   )
 }
