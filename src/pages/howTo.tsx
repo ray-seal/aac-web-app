@@ -79,22 +79,14 @@ Once you have created an account you can upload your own images to use. Whatever
 </figcaption>
 </li>
 <li>
-<img src="images/SSaddtoF.jpeg" style={{ width: '25%' }} alt="Add to Favourites" />
+<img src="images/IMG_4978.jpeg" style={{ width: '25%' }} alt="Add to Favourites" />
 <figcaption>
-In your parent tab you will also notice the Add to Favourites option. Selecting this will add to your favourites list at the bottom of the page.
-</figcaption>
-</li>
-<li>
-<img src="images/SSrearrange.jpeg" style={{ width: '25%' }} alt="Rearrange" />
-<figcaption>
-Once you have added to your favourites you can use the up and down arrows to rearrange them, the order you set them is the order they will appear on your main page.
-</figcaption>
-</li>
-<li>
-<img src="images/SSfavourites.jpeg" style={{ width: '25%' }}alt="Favourites" />
-<figcaption>
-Now your main screen should load automatically to your favourites and you are ready to start using the app.
-</figcaption>
+In your parent tab you can use the buttons at the top to decide which tabs to see on the home page.
+	Use the "Home" and "School" check boxes next to each symbol to put themmin the desired tab.
+<br />
+	<br />
+<p>Now your main screen should load automatically to your favourites and you are ready to start using the app.
+</p>
 </li>
         </ul>
       </div>
