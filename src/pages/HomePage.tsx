@@ -37,7 +37,7 @@ export default function HomePage() {
   const [user, setUser] = useState<any>(null)
   const [symbols, setSymbols] = useState<HomeSchoolSymbol[]>([])
   const [signedUrls, setSignedUrls] = useState<{ [id: string]: string }>({})
-  const [tabPrefs, setTabPrefs] = useState<TabPrefs>(getTabPrefs())
+  const [tabPrefs] = useState<TabPrefs>(getTabPrefs()) // FIX: remove setTabPrefs, only using tabPrefs
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
