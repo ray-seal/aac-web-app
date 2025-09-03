@@ -19,7 +19,33 @@ type HomeSchoolSymbol = {
   fileData?: string
 }
 
+type OfflineAction =
+  | { type: 'add'; data: HomeSchoolSymbol }
+  | { type: 'remove'; id: number }
+  | { type: 'update'; id: number; data: Partial<HomeSchoolSymbol> }
+  | { type: 'tab_prefs'; data: { user_id: string, all_tab: boolean, home: boolean, school: boolean } }
+
 type TabPrefs = { all_tab: boolean; home: boolean; school: boolean }
+
+function isOnline() {
+  return window.navigator.onLine
+}
+
+function addToOfflineQueue(action: OfflineAction) {
+  const queue: OfflineAction[] = JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]')
+  queue.push(action)
+  localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue))
+}
+function getOfflineQueue(): OfflineAction[] {
+  try {
+    return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]')
+  } catch {
+    return []
+  }
+}
+function clearOfflineQueue() {
+  localStorage.removeItem(OFFLINE_QUEUE_KEY)
+}
 
 export default function Parent() {
   // PIN logic
@@ -149,13 +175,18 @@ export default function Parent() {
   }, [user])
 
   async function fetchSymbols() {
-    const { data } = await supabase
-      .from('homeschool')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('order', { ascending: true })
-    setSymbols(data ?? [])
-    localStorage.setItem(HOME_SCHOOL_KEY, JSON.stringify(data ?? []))
+    if (isOnline()) {
+      const { data } = await supabase
+        .from('homeschool')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('order', { ascending: true })
+      setSymbols(data ?? [])
+      localStorage.setItem(HOME_SCHOOL_KEY, JSON.stringify(data ?? []))
+    } else {
+      const offline = localStorage.getItem(HOME_SCHOOL_KEY)
+      setSymbols(offline ? JSON.parse(offline) : [])
+    }
   }
 
   useEffect(() => {
@@ -181,18 +212,30 @@ export default function Parent() {
     if (!user) return
     const updated = { ...tabPrefs, [tabKey]: !tabPrefs[tabKey] }
     setTabPrefs(updated)
-    // Upsert to supabase
-    await supabase
-      .from('tab_prefs')
-      .upsert([
-        {
+    if (isOnline()) {
+      await supabase
+        .from('tab_prefs')
+        .upsert([
+          {
+            user_id: user.id,
+            all_tab: updated.all_tab,
+            home: updated.home,
+            school: updated.school,
+            updated_at: new Date().toISOString()
+          }
+        ])
+    } else {
+      // queue tab pref change
+      addToOfflineQueue({
+        type: 'tab_prefs',
+        data: {
           user_id: user.id,
           all_tab: updated.all_tab,
           home: updated.home,
-          school: updated.school,
-          updated_at: new Date().toISOString()
+          school: updated.school
         }
-      ])
+      })
+    }
   }
 
   // Only show enabled tabs in UI
@@ -236,13 +279,21 @@ export default function Parent() {
         school,
       }
       setSymbols([...symbols, newSym])
-      await supabase.from('homeschool').insert([newSym])
+      if (isOnline()) {
+        await supabase.from('homeschool').insert([newSym])
+      } else {
+        addToOfflineQueue({ type: 'add', data: newSym })
+      }
     } else {
       const updated = symbols.map(s =>
         s.id === exists.id ? { ...s, home, school } : s
       )
       setSymbols(updated)
-      await supabase.from('homeschool').update({ home, school }).eq('id', exists.id)
+      if (isOnline()) {
+        await supabase.from('homeschool').update({ home, school }).eq('id', exists.id)
+      } else {
+        addToOfflineQueue({ type: 'update', id: exists.id as number, data: { home, school } })
+      }
     }
   }
 
@@ -252,7 +303,11 @@ export default function Parent() {
       s.id === sym.id ? { ...s, home, school } : s
     )
     setSymbols(updated)
-    await supabase.from('homeschool').update({ home, school }).eq('id', sym.id)
+    if (isOnline()) {
+      await supabase.from('homeschool').update({ home, school }).eq('id', sym.id)
+    } else {
+      addToOfflineQueue({ type: 'update', id: sym.id as number, data: { home, school } })
+    }
   }
 
   // Upload new image logic
@@ -261,6 +316,32 @@ export default function Parent() {
     setError('')
     if (!user || !uploadFile || !uploadLabel) return
     const order = symbols.length > 0 ? Math.max(...symbols.map(f => f.order ?? 0)) + 1 : 1
+
+    if (!isOnline()) {
+      const reader = new FileReader()
+      reader.onload = () => {
+        const newSym: HomeSchoolSymbol = {
+          id: Date.now(),
+          user_id: user.id,
+          image_url: '',
+          label: uploadLabel,
+          type: 'upload',
+          order,
+          home: false,
+          school: false,
+          fileData: reader.result as string,
+        }
+        const updated = [...symbols, newSym]
+        setSymbols(updated)
+        localStorage.setItem(HOME_SCHOOL_KEY, JSON.stringify(updated))
+        addToOfflineQueue({ type: 'add', data: newSym })
+        setUploadLabel('')
+        setUploadFile(null)
+      }
+      reader.readAsDataURL(uploadFile)
+      return
+    }
+
     setUploading(true)
     const path = await uploadImage(uploadFile, user.id)
     setUploading(false)
@@ -281,8 +362,64 @@ export default function Parent() {
   async function handleRemoveSymbol(id: number) {
     const updated = symbols.filter(f => Number(f.id) !== Number(id))
     setSymbols(updated)
-    await supabase.from('homeschool').delete().eq('id', id)
+    if (isOnline()) {
+      await supabase.from('homeschool').delete().eq('id', id)
+    } else {
+      addToOfflineQueue({ type: 'remove', id })
+    }
   }
+
+  // Sync offline queue
+  useEffect(() => {
+    if (!user) return
+    function syncOfflineQueue() {
+      if (!isOnline()) return
+      const queue: OfflineAction[] = getOfflineQueue()
+      if (!queue.length) return
+
+      Promise.all(queue.map(async action => {
+        if (action.type === 'add') {
+          const { id, fileData, ...toInsert } = action.data
+          if (fileData) {
+            try {
+              const res = await fetch(fileData as string)
+              const blob = await res.blob()
+              const file = new File([blob], "offline-upload.png", { type: blob.type })
+              const path = await uploadImage(file, toInsert.user_id)
+              if (path) {
+                toInsert.image_url = path
+              } else {
+                return
+              }
+            } catch {
+              return
+            }
+          }
+          await supabase.from('homeschool').insert([{ ...toInsert }])
+        } else if (action.type === 'remove') {
+          await supabase.from('homeschool').delete().eq('id', action.id)
+        } else if (action.type === 'update') {
+          await supabase.from('homeschool').update(action.data).eq('id', action.id)
+        } else if (action.type === 'tab_prefs') {
+          await supabase.from('tab_prefs').upsert([
+            {
+              user_id: action.data.user_id,
+              all_tab: action.data.all_tab,
+              home: action.data.home,
+              school: action.data.school,
+              updated_at: new Date().toISOString()
+            }
+          ])
+        }
+      })).then(() => {
+        clearOfflineQueue()
+        fetchSymbols()
+      })
+    }
+    window.addEventListener('online', syncOfflineQueue)
+    if (isOnline()) syncOfflineQueue()
+    return () => window.removeEventListener('online', syncOfflineQueue)
+  }, [user, symbols])
 
   // PIN prompt modal
   if (showPinPrompt) {
