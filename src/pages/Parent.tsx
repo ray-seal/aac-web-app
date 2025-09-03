@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { aacSymbols, AacSymbol } from '../data/aac-symbols'
 import { uploadImage, getSignedImageUrl } from '../utils/uploadImage'
-import { useNavigate } from 'react-router-dom'
 
 const HOME_SCHOOL_KEY = 'aac_homeschool'
 const OFFLINE_QUEUE_KEY = 'aac_homeschool_queue'
@@ -47,13 +46,12 @@ function addToOfflineQueue(action: OfflineAction) {
 export default function Parent() {
   const [user, setUser] = useState<any>(null)
   const [symbols, setSymbols] = useState<HomeSchoolSymbol[]>([])
-  const [signedUrls, setSignedUrls] = useState<{ [id: number]: string }>({})
+  const [signedUrls, setSignedUrls] = useState<{ [id: string]: string }>({})
   const [tab, setTab] = useState<'all' | 'home' | 'school'>('all')
   const [uploading, setUploading] = useState(false)
   const [uploadLabel, setUploadLabel] = useState('')
   const [uploadFile, setUploadFile] = useState<File | null>(null)
   const [error, setError] = useState('')
-  const navigate = useNavigate()
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -94,10 +92,10 @@ export default function Parent() {
   useEffect(() => {
     async function loadSignedUrls() {
       const uploads = symbols.filter(f => f.type !== 'aac')
-      const urlMap: { [id: number]: string } = {}
+      const urlMap: { [id: string]: string } = {}
       await Promise.all(
         uploads.map(async sym => {
-          urlMap[sym.id] = await getSignedImageUrl(sym.image_url)
+          urlMap[String(sym.id)] = await getSignedImageUrl(sym.image_url)
         })
       )
       setSignedUrls(urlMap)
@@ -357,7 +355,7 @@ export default function Parent() {
           .filter(s => s.type === 'upload')
           .map(sym => (
             <div key={sym.id} className="border rounded px-2 py-1 flex items-center gap-3 bg-gray-50 mb-2">
-              <img src={signedUrls[sym.id] || sym.image_url} alt={sym.label} className="w-8 h-8 object-cover rounded" />
+              <img src={signedUrls[String(sym.id)] || sym.image_url} alt={sym.label} className="w-8 h-8 object-cover rounded" />
               <span className="text-xs">{sym.label}</span>
               <label className="flex items-center gap-1 text-xs">
                 <input
@@ -402,7 +400,7 @@ export default function Parent() {
               <img
                 src={sym.type === 'aac'
                   ? sym.image_url
-                  : (signedUrls[sym.id] || sym.image_url)}
+                  : (signedUrls[String(sym.id)] || sym.image_url)}
                 alt={sym.label}
                 className="w-16 h-16 object-cover rounded mb-2"
                 style={{ background: '#E0E7EF' }}
