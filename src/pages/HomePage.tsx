@@ -21,7 +21,6 @@ type HomeSchoolSymbol = {
 
 type TabPrefs = { all_tab: boolean; home: boolean; school: boolean }
 
-// Convert AAC symbols to HomeSchoolSymbol for guest mode
 function guestSymbolsFromAac(): HomeSchoolSymbol[] {
   return aacSymbols.map((sym, idx) => ({
     id: sym.id,
@@ -34,7 +33,6 @@ function guestSymbolsFromAac(): HomeSchoolSymbol[] {
   }))
 }
 
-// Caches user-uploaded images as data URLs in localStorage for offline use
 async function cacheUserImages(symbols: HomeSchoolSymbol[], signedUrls: { [id: string]: string }) {
   const cache: { [id: string]: string } = JSON.parse(localStorage.getItem('user_image_cache') || '{}');
   let updated = false;
@@ -53,9 +51,7 @@ async function cacheUserImages(symbols: HomeSchoolSymbol[], signedUrls: { [id: s
           });
           cache[sym.id] = dataUrl;
           updated = true;
-        } catch (err) {
-          // Could not fetch/couldn't cache
-        }
+        } catch (err) {}
       }
     }
   }
@@ -81,55 +77,91 @@ export default function HomePage() {
   const [isGuest, setIsGuest] = useState(false)
   const [loadingPrefs, setLoadingPrefs] = useState(false)
 
-  // On mount, check user and fetch tab prefs if logged in
+  // Fallback: try localStorage if offline or supabase fails
   useEffect(() => {
     let unsub: any
-    supabase.auth.getUser().then(async ({ data }) => {
-      if (data?.user) {
-        setUser(data.user)
-        setIsGuest(false)
-        setLoadingPrefs(true)
-        const { data: prefs } = await supabase
-          .from('tab_prefs')
-          .select('*')
-          .eq('user_id', data.user.id)
-          .single()
-        if (prefs) {
-          setTabPrefs({
-            all_tab: prefs.all_tab ?? true,
-            home: prefs.home ?? true,
-            school: prefs.school ?? true,
-          })
-        } else {
-          setTabPrefs({ all_tab: true, home: true, school: true })
+    let cancelled = false
+    async function fetchPrefsAndUser() {
+      setLoadingPrefs(true)
+      try {
+        const { data: auth } = await supabase.auth.getUser()
+        if (!auth?.user) {
+          setIsGuest(true)
+          setUser(null)
+          setSymbols(guestSymbolsFromAac())
+          setTab('all')
+          setTabPrefs({ all_tab: true, home: false, school: false })
+          setLoadingPrefs(false)
+          return
         }
+        setUser(auth.user)
+        setIsGuest(false)
+        // Try online first
+        if (navigator.onLine) {
+          const { data: prefs, error } = await supabase
+            .from('tab_prefs')
+            .select('*')
+            .eq('user_id', auth.user.id)
+            .single()
+          if (!cancelled) {
+            if (prefs) {
+              setTabPrefs({
+                all_tab: prefs.all_tab ?? true,
+                home: prefs.home ?? true,
+                school: prefs.school ?? true,
+              })
+              localStorage.setItem("tab_prefs", JSON.stringify(prefs))
+            } else if (!error) {
+              setTabPrefs({ all_tab: true, home: true, school: true })
+              localStorage.setItem("tab_prefs", JSON.stringify({ all_tab: true, home: true, school: true }))
+            } else {
+              // error (e.g. network): fallback
+              const cached = localStorage.getItem("tab_prefs")
+              if (cached) setTabPrefs(JSON.parse(cached))
+            }
+            setLoadingPrefs(false)
+          }
+        } else {
+          // offline
+          const cached = localStorage.getItem("tab_prefs")
+          if (cached) setTabPrefs(JSON.parse(cached))
+          setLoadingPrefs(false)
+        }
+      } catch (e) {
+        const cached = localStorage.getItem("tab_prefs")
+        if (cached) setTabPrefs(JSON.parse(cached))
         setLoadingPrefs(false)
-      } else {
-        setIsGuest(true)
-        setUser(null)
-        setSymbols(guestSymbolsFromAac())
-        setTab('all')
-        setTabPrefs({ all_tab: true, home: false, school: false })
       }
-    })
+    }
+    fetchPrefsAndUser()
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
         setUser(session.user)
         setIsGuest(false)
         setLoadingPrefs(true)
-        const { data: prefs } = await supabase
-          .from('tab_prefs')
-          .select('*')
-          .eq('user_id', session.user.id)
-          .single()
-        if (prefs) {
-          setTabPrefs({
-            all_tab: prefs.all_tab ?? true,
-            home: prefs.home ?? true,
-            school: prefs.school ?? true,
-          })
-        } else {
-          setTabPrefs({ all_tab: true, home: true, school: true })
+        try {
+          const { data: prefs, error } = await supabase
+            .from('tab_prefs')
+            .select('*')
+            .eq('user_id', session.user.id)
+            .single()
+          if (prefs) {
+            setTabPrefs({
+              all_tab: prefs.all_tab ?? true,
+              home: prefs.home ?? true,
+              school: prefs.school ?? true,
+            })
+            localStorage.setItem("tab_prefs", JSON.stringify(prefs))
+          } else if (!error) {
+            setTabPrefs({ all_tab: true, home: true, school: true })
+            localStorage.setItem("tab_prefs", JSON.stringify({ all_tab: true, home: true, school: true }))
+          } else {
+            const cached = localStorage.getItem("tab_prefs")
+            if (cached) setTabPrefs(JSON.parse(cached))
+          }
+        } catch {
+          const cached = localStorage.getItem("tab_prefs")
+          if (cached) setTabPrefs(JSON.parse(cached))
         }
         setLoadingPrefs(false)
       } else {
@@ -138,15 +170,17 @@ export default function HomePage() {
         setSymbols(guestSymbolsFromAac())
         setTab('all')
         setTabPrefs({ all_tab: true, home: false, school: false })
+        setLoadingPrefs(false)
       }
     })
     unsub = listener?.subscription
     return () => {
       unsub?.unsubscribe()
+      cancelled = true
     }
   }, [])
 
-  // If user logs in, fetch their symbols
+  // If user logs in, fetch their symbols (with fallback)
   useEffect(() => {
     if (isGuest) return
     if (!user) {
@@ -155,6 +189,7 @@ export default function HomePage() {
       return
     }
     fetchSymbols()
+    // eslint-disable-next-line
   }, [user, isGuest])
 
   async function fetchSymbols() {
@@ -210,27 +245,22 @@ export default function HomePage() {
     }
   }, [tabPrefs, enabledTabs])
 
-  // Filtered symbols by tab
   const filtered = tab === 'all'
     ? symbols
     : tab === 'home'
       ? symbols.filter(s => s.home)
       : symbols.filter(s => s.school)
 
-  // Communication panel logic with no duplicate symbols
   function handleSymbolClick(sym: HomeSchoolSymbol) {
     if (panel.some(s => s.id === sym.id)) return
     setPanel(prev => [...prev, sym])
   }
-
   function handlePanelRemove(idx: number) {
     setPanel(prev => prev.filter((_, i) => i !== idx))
   }
-
   function handlePanelClear() {
     setPanel([])
   }
-
   function handleSpeak() {
     if ('speechSynthesis' in window && panel.length) {
       const utter = new window.SpeechSynthesisUtterance(
