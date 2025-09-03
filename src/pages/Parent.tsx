@@ -5,11 +5,7 @@ import { uploadImage, getSignedImageUrl } from '../utils/uploadImage'
 
 const HOME_SCHOOL_KEY = 'aac_homeschool'
 const OFFLINE_QUEUE_KEY = 'aac_homeschool_queue'
-const PIN_KEY = 'aac_parent_pin' // key for storing pin in localStorage
-
-function isOnline() {
-  return window.navigator.onLine
-}
+const PIN_KEY = 'aac_parent_pin'
 
 type HomeSchoolSymbol = {
   id: string | number
@@ -23,28 +19,7 @@ type HomeSchoolSymbol = {
   fileData?: string
 }
 
-type OfflineAction =
-  | { type: 'add'; data: HomeSchoolSymbol }
-  | { type: 'remove'; id: number }
-  | { type: 'update'; id: number; data: Partial<HomeSchoolSymbol> }
-
 type TabPrefs = { all_tab: boolean; home: boolean; school: boolean }
-
-function addToOfflineQueue(action: OfflineAction) {
-  const queue: OfflineAction[] = JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]')
-  queue.push(action)
-  localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue))
-}
-function getOfflineQueue(): OfflineAction[] {
-  try {
-    return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]')
-  } catch {
-    return []
-  }
-}
-function clearOfflineQueue() {
-  localStorage.removeItem(OFFLINE_QUEUE_KEY)
-}
 
 export default function Parent() {
   // PIN logic
@@ -80,7 +55,6 @@ export default function Parent() {
     e.preventDefault()
     const storedPin = localStorage.getItem(PIN_KEY)
     if (!storedPin) {
-      // Setting pin for first time
       if (!pinInput || !pinConfirm) {
         setPinError('Please enter and confirm your new PIN.')
         return
@@ -96,7 +70,6 @@ export default function Parent() {
       setPinError('')
       setPinSetMode(false)
     } else {
-      // Checking pin
       if (pinInput === storedPin) {
         setShowPinPrompt(false)
         setPinInput('')
@@ -123,7 +96,6 @@ export default function Parent() {
       if (data?.user) {
         setUser(data.user)
         setPrefsLoading(true)
-        // Fetch tab prefs from Supabase
         const { data: prefs } = await supabase
           .from('tab_prefs')
           .select('*')
@@ -177,18 +149,13 @@ export default function Parent() {
   }, [user])
 
   async function fetchSymbols() {
-    if (isOnline()) {
-      const { data } = await supabase
-        .from('homeschool')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('order', { ascending: true })
-      setSymbols(data ?? [])
-      localStorage.setItem(HOME_SCHOOL_KEY, JSON.stringify(data ?? []))
-    } else {
-      const offline = localStorage.getItem(HOME_SCHOOL_KEY)
-      setSymbols(offline ? JSON.parse(offline) : [])
-    }
+    const { data } = await supabase
+      .from('homeschool')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('order', { ascending: true })
+    setSymbols(data ?? [])
+    localStorage.setItem(HOME_SCHOOL_KEY, JSON.stringify(data ?? []))
   }
 
   useEffect(() => {
@@ -209,160 +176,7 @@ export default function Parent() {
     }
   }, [symbols])
 
-  // Upload new image logic
-  async function handleUploadSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setError('')
-    if (!user || !uploadFile || !uploadLabel) return
-    const order = symbols.length > 0 ? Math.max(...symbols.map(f => f.order ?? 0)) + 1 : 1
-
-    if (!isOnline()) {
-      const reader = new FileReader()
-      reader.onload = () => {
-        const newSym: HomeSchoolSymbol = {
-          id: Date.now(),
-          user_id: user.id,
-          image_url: '',
-          label: uploadLabel,
-          type: 'upload',
-          order,
-          home: false,
-          school: false,
-          fileData: reader.result as string,
-        }
-        const updated = [...symbols, newSym]
-        setSymbols(updated)
-        localStorage.setItem(HOME_SCHOOL_KEY, JSON.stringify(updated))
-        addToOfflineQueue({ type: 'add', data: newSym })
-        setUploadLabel('')
-        setUploadFile(null)
-      }
-      reader.readAsDataURL(uploadFile)
-      return
-    }
-
-    setUploading(true)
-    const path = await uploadImage(uploadFile, user.id)
-    setUploading(false)
-    if (!path) return
-    const { error: uploadError } = await supabase
-      .from('homeschool')
-      .insert([{ user_id: user.id, image_url: path, label: uploadLabel, type: 'upload', order, home: false, school: false }])
-    if (!uploadError) {
-      setUploadLabel('')
-      setUploadFile(null)
-      fetchSymbols()
-    } else {
-      setError(uploadError.message)
-    }
-  }
-
-  // Toggle Home/School for AAC or Upload
-  async function handleToggleHomeSchool(sym: AacSymbol, home: boolean, school: boolean) {
-    if (!user) return
-    const exists = symbols.find(f => f.label === sym.text && f.type === 'aac')
-    if (!exists) {
-      const order = symbols.length > 0 ? Math.max(...symbols.map(f => f.order ?? 0)) + 1 : 1
-      const newSym: HomeSchoolSymbol = {
-        id: Date.now(),
-        user_id: user.id,
-        image_url: sym.imagePath,
-        label: sym.text,
-        type: 'aac',
-        order,
-        home,
-        school,
-      }
-      setSymbols([...symbols, newSym])
-      localStorage.setItem(HOME_SCHOOL_KEY, JSON.stringify([...symbols, newSym]))
-      if (isOnline()) {
-        await supabase.from('homeschool').insert([newSym])
-      } else {
-        addToOfflineQueue({ type: 'add', data: newSym })
-      }
-    } else {
-      const updated = symbols.map(s =>
-        s.id === exists.id ? { ...s, home, school } : s
-      )
-      setSymbols(updated)
-      localStorage.setItem(HOME_SCHOOL_KEY, JSON.stringify(updated))
-      if (isOnline()) {
-        await supabase.from('homeschool').update({ home, school }).eq('id', exists.id)
-      } else {
-        addToOfflineQueue({ type: 'update', id: exists.id as number, data: { home, school } })
-      }
-    }
-  }
-
-  // Toggle for uploads after upload
-  async function handleUploadToggleHomeSchool(sym: HomeSchoolSymbol, home: boolean, school: boolean) {
-    const updated = symbols.map(s =>
-      s.id === sym.id ? { ...s, home, school } : s
-    )
-    setSymbols(updated)
-    localStorage.setItem(HOME_SCHOOL_KEY, JSON.stringify(updated))
-    if (isOnline()) {
-      await supabase.from('homeschool').update({ home, school }).eq('id', sym.id)
-    } else {
-      addToOfflineQueue({ type: 'update', id: sym.id as number, data: { home, school } })
-    }
-  }
-
-  // Remove symbol
-  async function handleRemoveSymbol(id: number) {
-    const updated = symbols.filter(f => Number(f.id) !== Number(id))
-    setSymbols(updated)
-    localStorage.setItem(HOME_SCHOOL_KEY, JSON.stringify(updated))
-    if (isOnline()) {
-      await supabase.from('homeschool').delete().eq('id', id)
-    } else {
-      addToOfflineQueue({ type: 'remove', id })
-    }
-  }
-
-  // Sync offline queue
-  useEffect(() => {
-    if (!user) return
-    function syncOfflineQueue() {
-      if (!isOnline()) return
-      const queue: OfflineAction[] = getOfflineQueue()
-      if (!queue.length) return
-
-      Promise.all(queue.map(async action => {
-        if (action.type === 'add') {
-          const { id, fileData, ...toInsert } = action.data
-          if (fileData) {
-            try {
-              const res = await fetch(fileData as string)
-              const blob = await res.blob()
-              const file = new File([blob], "offline-upload.png", { type: blob.type })
-              const path = await uploadImage(file, toInsert.user_id)
-              if (path) {
-                toInsert.image_url = path
-              } else {
-                return
-              }
-            } catch {
-              return
-            }
-          }
-          await supabase.from('homeschool').insert([{ ...toInsert }])
-        } else if (action.type === 'remove') {
-          await supabase.from('homeschool').delete().eq('id', action.id)
-        } else if (action.type === 'update') {
-          await supabase.from('homeschool').update(action.data).eq('id', action.id)
-        }
-      })).then(() => {
-        clearOfflineQueue()
-        fetchSymbols()
-      })
-    }
-    window.addEventListener('online', syncOfflineQueue)
-    if (isOnline()) syncOfflineQueue()
-    return () => window.removeEventListener('online', syncOfflineQueue)
-  }, [user, symbols])
-
-  // Tab preference toggles (now update Supabase, not localStorage)
+  // Tab preference toggles
   async function handleTabPrefChange(tabKey: keyof TabPrefs) {
     if (!user) return
     const updated = { ...tabPrefs, [tabKey]: !tabPrefs[tabKey] }
@@ -381,13 +195,6 @@ export default function Parent() {
       ])
   }
 
-  // Filtering by tab
-  const filtered = tab === 'all'
-    ? symbols
-    : tab === 'home'
-      ? symbols.filter(s => s.home)
-      : symbols.filter(s => s.school)
-
   // Only show enabled tabs in UI
   const enabledTabs = [
     tabPrefs.all_tab && { key: 'all', label: 'All' },
@@ -404,6 +211,78 @@ export default function Parent() {
       setTab(first as 'all' | 'home' | 'school')
     }
   }, [tabPrefs, enabledTabs])
+
+  // Filtering by tab
+  const filtered = tab === 'all'
+    ? symbols
+    : tab === 'home'
+      ? symbols.filter(s => s.home)
+      : symbols.filter(s => s.school)
+
+  // Toggle Home/School for AAC or Upload
+  async function handleToggleHomeSchool(sym: AacSymbol, home: boolean, school: boolean) {
+    if (!user) return
+    const exists = symbols.find(f => f.label === sym.text && f.type === 'aac')
+    if (!exists) {
+      const order = symbols.length > 0 ? Math.max(...symbols.map(f => f.order ?? 0)) + 1 : 1
+      const newSym: HomeSchoolSymbol = {
+        id: Date.now(),
+        user_id: user.id,
+        image_url: sym.imagePath,
+        label: sym.text,
+        type: 'aac',
+        order,
+        home,
+        school,
+      }
+      setSymbols([...symbols, newSym])
+      await supabase.from('homeschool').insert([newSym])
+    } else {
+      const updated = symbols.map(s =>
+        s.id === exists.id ? { ...s, home, school } : s
+      )
+      setSymbols(updated)
+      await supabase.from('homeschool').update({ home, school }).eq('id', exists.id)
+    }
+  }
+
+  // Toggle for uploads after upload
+  async function handleUploadToggleHomeSchool(sym: HomeSchoolSymbol, home: boolean, school: boolean) {
+    const updated = symbols.map(s =>
+      s.id === sym.id ? { ...s, home, school } : s
+    )
+    setSymbols(updated)
+    await supabase.from('homeschool').update({ home, school }).eq('id', sym.id)
+  }
+
+  // Upload new image logic
+  async function handleUploadSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError('')
+    if (!user || !uploadFile || !uploadLabel) return
+    const order = symbols.length > 0 ? Math.max(...symbols.map(f => f.order ?? 0)) + 1 : 1
+    setUploading(true)
+    const path = await uploadImage(uploadFile, user.id)
+    setUploading(false)
+    if (!path) return
+    const { error: uploadError } = await supabase
+      .from('homeschool')
+      .insert([{ user_id: user.id, image_url: path, label: uploadLabel, type: 'upload', order, home: false, school: false }])
+    if (!uploadError) {
+      setUploadLabel('')
+      setUploadFile(null)
+      fetchSymbols()
+    } else {
+      setError(uploadError.message)
+    }
+  }
+
+  // Remove symbol
+  async function handleRemoveSymbol(id: number) {
+    const updated = symbols.filter(f => Number(f.id) !== Number(id))
+    setSymbols(updated)
+    await supabase.from('homeschool').delete().eq('id', id)
+  }
 
   // PIN prompt modal
   if (showPinPrompt) {
@@ -523,7 +402,6 @@ export default function Parent() {
             {uploading ? 'Uploading...' : 'Add'}
           </button>
         </form>
-        {!isOnline() && <div className="text-yellow-600 mt-2">Offline: Uploads will be queued and synced when you go back online</div>}
         {error && <div className="text-red-600 mt-2">{error}</div>}
       </div>
       {/* Home/School checkboxes for AAC */}
