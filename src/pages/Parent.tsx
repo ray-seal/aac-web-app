@@ -5,6 +5,7 @@ import { uploadImage, getSignedImageUrl } from '../utils/uploadImage'
 
 const HOME_SCHOOL_KEY = 'aac_homeschool'
 const OFFLINE_QUEUE_KEY = 'aac_homeschool_queue'
+const TAB_PREF_KEY = 'aac_tab_preferences'
 
 function isOnline() {
   return window.navigator.onLine
@@ -27,20 +28,15 @@ type OfflineAction =
   | { type: 'remove'; id: number }
   | { type: 'update'; id: number; data: Partial<HomeSchoolSymbol> }
 
-function clearOfflineQueue() {
-  localStorage.removeItem(OFFLINE_QUEUE_KEY)
-}
-function getOfflineQueue(): OfflineAction[] {
+type TabPrefs = { all: boolean; home: boolean; school: boolean }
+
+function getTabPrefs(): TabPrefs {
   try {
-    return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]')
+    return JSON.parse(localStorage.getItem(TAB_PREF_KEY) || '')
+      ?? { all: true, home: true, school: true }
   } catch {
-    return []
+    return { all: true, home: true, school: true }
   }
-}
-function addToOfflineQueue(action: OfflineAction) {
-  const queue = getOfflineQueue()
-  queue.push(action)
-  localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue))
 }
 
 export default function Parent() {
@@ -52,6 +48,7 @@ export default function Parent() {
   const [uploadLabel, setUploadLabel] = useState('')
   const [uploadFile, setUploadFile] = useState<File | null>(null)
   const [error, setError] = useState('')
+  const [tabPrefs, setTabPrefs] = useState<TabPrefs>(getTabPrefs())
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -260,6 +257,13 @@ export default function Parent() {
     return () => window.removeEventListener('online', syncOfflineQueue)
   }, [user, symbols])
 
+  // Tab preference toggles
+  function handleTabPrefChange(tabKey: keyof TabPrefs) {
+    const updated = { ...tabPrefs, [tabKey]: !tabPrefs[tabKey] }
+    setTabPrefs(updated)
+    localStorage.setItem(TAB_PREF_KEY, JSON.stringify(updated))
+  }
+
   // Filtering by tab
   const filtered = tab === 'all'
     ? symbols
@@ -267,17 +271,61 @@ export default function Parent() {
       ? symbols.filter(s => s.home)
       : symbols.filter(s => s.school)
 
-  return (
-    <div className="max-w-4xl mx-auto mt-10 p-4 bg-white rounded shadow">
-      <div className="flex gap-4 mb-4">
-        <button className={tab === 'all' ? 'font-bold underline' : ''} onClick={() => setTab('all')}>All</button>
-        <button className={tab === 'home' ? 'font-bold underline' : ''} onClick={() => setTab('home')}>Home</button>
-        <button className={tab === 'school' ? 'font-bold underline' : ''} onClick={() => setTab('school')}>School</button>
-      </div>
+  // Only show enabled tabs in UI
+  const enabledTabs = [
+    tabPrefs.all && { key: 'all', label: 'All' },
+    tabPrefs.home && { key: 'home', label: 'Home' },
+    tabPrefs.school && { key: 'school', label: 'School' },
+  ].filter(Boolean) as { key: 'all' | 'home' | 'school'; label: string }[]
 
+  // Set tab to first enabled if current one disabled
+  useEffect(() => {
+    if (!tabPrefs[tab]) {
+      const first = enabledTabs[0]?.key || 'all'
+      setTab(first)
+    }
+    // eslint-disable-next-line
+  }, [tabPrefs])
+
+  return (
+    <div className="max-w-4xl mx-auto mt-6 p-4 bg-white rounded shadow">
+      <div className="flex flex-row justify-between items-center mb-4">
+        <div className="flex gap-2">
+          <button className="bg-gray-400 text-white px-4 py-2 rounded" onClick={() => window.location.href = '/'}>Back</button>
+          <button className="bg-gray-400 text-white px-4 py-2 rounded" onClick={() => window.location.href = '/how-to'}>How To Guide</button>
+        </div>
+        <h2 className="text-2xl font-bold text-center flex-1">Welcome, Parent!</h2>
+        <button className="bg-gray-400 text-white px-4 py-2 rounded" onClick={async () => { await supabase.auth.signOut(); window.location.href = '/' }}>Sign Out</button>
+      </div>
+      <div className="mb-4 text-center">
+        <span>You are signed in as <span className="font-mono">{user?.email}</span></span>
+      </div>
+      <div className="flex flex-row justify-center gap-4 mb-4">
+        {(['all', 'home', 'school'] as (keyof TabPrefs)[]).map(tabKey => (
+          <label key={tabKey} className="flex items-center gap-1 text-sm">
+            <input
+              type="checkbox"
+              checked={tabPrefs[tabKey]}
+              onChange={() => handleTabPrefChange(tabKey)}
+            />
+            Show {tabKey.charAt(0).toUpperCase() + tabKey.slice(1)} Tab
+          </label>
+        ))}
+      </div>
+      <div className="flex gap-4 mb-4 justify-center">
+        {enabledTabs.map(t => (
+          <button
+            key={t.key}
+            className={tab === t.key ? 'font-bold underline' : ''}
+            onClick={() => setTab(t.key)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
       {/* Upload new symbol */}
       <div className="mb-8">
-        <h3 className="font-bold mb-2">Upload new image symbol</h3>
+        <h3 className="font-bold mb-2">Upload new favourite</h3>
         <form onSubmit={handleUploadSubmit} className="flex gap-2 items-end flex-wrap">
           <input
             type="file"
@@ -306,7 +354,6 @@ export default function Parent() {
         {!isOnline() && <div className="text-yellow-600 mt-2">Offline: Uploads will be queued and synced when you go back online</div>}
         {error && <div className="text-red-600 mt-2">{error}</div>}
       </div>
-
       {/* Home/School checkboxes for AAC */}
       <div className="mb-4 flex gap-2 flex-wrap">
         {aacSymbols.map(sym => {
@@ -348,7 +395,6 @@ export default function Parent() {
           )
         })}
       </div>
-
       {/* Home/School checkboxes for uploads */}
       <div className="mb-4 flex gap-2 flex-wrap">
         {symbols
@@ -387,7 +433,6 @@ export default function Parent() {
             </div>
           ))}
       </div>
-
       <hr className="my-6" />
       <div>
         <h3 className="font-bold mb-2">Your Symbols</h3>
