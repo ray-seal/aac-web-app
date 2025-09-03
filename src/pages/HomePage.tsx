@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { getSignedImageUrl } from '../utils/uploadImage'
-import { aacSymbols, AacSymbol } from '../data/aac-symbols'
+import { aacSymbols } from '../data/aac-symbols'
 
 const HOME_SCHOOL_KEY = 'aac_homeschool'
 const TAB_PREF_KEY = 'aac_tab_preferences'
@@ -146,7 +146,7 @@ export default function HomePage() {
   useEffect(() => {
     if (!enabledTabs.find(t => t.key === tab)) {
       const first = enabledTabs[0]?.key || 'all'
-      setTab(first)
+      setTab(first as 'all' | 'home' | 'school')
     }
     // eslint-disable-next-line
   }, [tabPrefs, enabledTabs])
@@ -267,7 +267,7 @@ export default function HomePage() {
           <button
             key={t.key}
             className={tab === t.key ? 'font-bold underline' : ''}
-            onClick={() => setTab(t.key)}
+            onClick={() => setTab(t.key as 'all' | 'home' | 'school')}
             disabled={isGuest && t.key !== 'all'}
           >
             {t.label}
