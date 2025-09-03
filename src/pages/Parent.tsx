@@ -4,7 +4,6 @@ import { aacSymbols, AacSymbol } from '../data/aac-symbols'
 import { uploadImage, getSignedImageUrl } from '../utils/uploadImage'
 
 const HOME_SCHOOL_KEY = 'aac_homeschool'
-const TAB_PREF_KEY = 'aac_tab_preferences'
 const OFFLINE_QUEUE_KEY = 'aac_homeschool_queue'
 const PIN_KEY = 'aac_parent_pin' // key for storing pin in localStorage
 
@@ -29,16 +28,7 @@ type OfflineAction =
   | { type: 'remove'; id: number }
   | { type: 'update'; id: number; data: Partial<HomeSchoolSymbol> }
 
-type TabPrefs = { all: boolean; home: boolean; school: boolean }
-
-function getTabPrefs(): TabPrefs {
-  try {
-    return JSON.parse(localStorage.getItem(TAB_PREF_KEY) || '')
-      ?? { all: true, home: true, school: true }
-  } catch {
-    return { all: true, home: true, school: true }
-  }
-}
+type TabPrefs = { all_tab: boolean; home: boolean; school: boolean }
 
 function addToOfflineQueue(action: OfflineAction) {
   const queue: OfflineAction[] = JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]')
@@ -64,7 +54,6 @@ export default function Parent() {
   const [pinSetMode, setPinSetMode] = useState(false)
   const [pinConfirm, setPinConfirm] = useState('')
 
-  // rest of logic
   const [user, setUser] = useState<any>(null)
   const [symbols, setSymbols] = useState<HomeSchoolSymbol[]>([])
   const [signedUrls, setSignedUrls] = useState<{ [id: string]: string }>({})
@@ -73,7 +62,8 @@ export default function Parent() {
   const [uploadLabel, setUploadLabel] = useState('')
   const [uploadFile, setUploadFile] = useState<File | null>(null)
   const [error, setError] = useState('')
-  const [tabPrefs, setTabPrefs] = useState<TabPrefs>(getTabPrefs())
+  const [tabPrefs, setTabPrefs] = useState<TabPrefs>({ all_tab: true, home: true, school: true })
+  const [prefsLoading, setPrefsLoading] = useState(false)
 
   // PIN check on mount
   useEffect(() => {
@@ -126,13 +116,51 @@ export default function Parent() {
     setShowPinPrompt(true)
   }
 
+  // Fetch user and tab prefs
   useEffect(() => {
     if (showPinPrompt) return
-    supabase.auth.getUser().then(({ data }) => {
-      if (data?.user) setUser(data.user)
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (data?.user) {
+        setUser(data.user)
+        setPrefsLoading(true)
+        // Fetch tab prefs from Supabase
+        const { data: prefs } = await supabase
+          .from('tab_prefs')
+          .select('*')
+          .eq('user_id', data.user.id)
+          .single()
+        if (prefs) {
+          setTabPrefs({
+            all_tab: prefs.all_tab ?? true,
+            home: prefs.home ?? true,
+            school: prefs.school ?? true,
+          })
+        } else {
+          setTabPrefs({ all_tab: true, home: true, school: true })
+        }
+        setPrefsLoading(false)
+      }
     })
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        setUser(session.user)
+        setPrefsLoading(true)
+        const { data: prefs } = await supabase
+          .from('tab_prefs')
+          .select('*')
+          .eq('user_id', session.user.id)
+          .single()
+        if (prefs) {
+          setTabPrefs({
+            all_tab: prefs.all_tab ?? true,
+            home: prefs.home ?? true,
+            school: prefs.school ?? true,
+          })
+        } else {
+          setTabPrefs({ all_tab: true, home: true, school: true })
+        }
+        setPrefsLoading(false)
+      }
     })
     return () => {
       listener?.subscription.unsubscribe()
@@ -334,11 +362,24 @@ export default function Parent() {
     return () => window.removeEventListener('online', syncOfflineQueue)
   }, [user, symbols])
 
-  // Tab preference toggles
-  function handleTabPrefChange(tabKey: keyof TabPrefs) {
+  // Tab preference toggles (now update Supabase, not localStorage)
+  async function handleTabPrefChange(tabKey: keyof TabPrefs) {
+    if (!user) return
     const updated = { ...tabPrefs, [tabKey]: !tabPrefs[tabKey] }
     setTabPrefs(updated)
-    localStorage.setItem(TAB_PREF_KEY, JSON.stringify(updated))
+    // Upsert to supabase
+    const { error } = await supabase
+      .from('tab_prefs')
+      .upsert([
+        {
+          user_id: user.id,
+          all_tab: updated.all_tab,
+          home: updated.home,
+          school: updated.school,
+          updated_at: new Date().toISOString()
+        }
+      ])
+    // Optionally handle error UI
   }
 
   // Filtering by tab
@@ -350,19 +391,20 @@ export default function Parent() {
 
   // Only show enabled tabs in UI
   const enabledTabs = [
-    tabPrefs.all && { key: 'all', label: 'All' },
+    tabPrefs.all_tab && { key: 'all', label: 'All' },
     tabPrefs.home && { key: 'home', label: 'Home' },
     tabPrefs.school && { key: 'school', label: 'School' },
   ].filter(Boolean) as { key: 'all' | 'home' | 'school'; label: string }[]
 
   // Set tab to first enabled if current one disabled
   useEffect(() => {
-    if (!tabPrefs[tab]) {
+    if (!(tab === 'all' && tabPrefs.all_tab) &&
+        !(tab === 'home' && tabPrefs.home) &&
+        !(tab === 'school' && tabPrefs.school)) {
       const first = enabledTabs[0]?.key || 'all'
-      setTab(first)
+      setTab(first as 'all' | 'home' | 'school')
     }
-    // eslint-disable-next-line
-  }, [tabPrefs])
+  }, [tabPrefs, enabledTabs])
 
   // PIN prompt modal
   if (showPinPrompt) {
@@ -422,24 +464,29 @@ export default function Parent() {
       <div className="mb-4 text-center">
         <span>You are signed in as <span className="font-mono">{user?.email}</span></span>
       </div>
-      <div className="flex flex-row justify-center gap-4 mb-4">
-        {(['all', 'home', 'school'] as (keyof TabPrefs)[]).map(tabKey => (
-          <label key={tabKey} className="flex items-center gap-1 text-sm">
-            <input
-              type="checkbox"
-              checked={tabPrefs[tabKey]}
-              onChange={() => handleTabPrefChange(tabKey)}
-            />
-            Show {tabKey.charAt(0).toUpperCase() + tabKey.slice(1)} Tab
-          </label>
-        ))}
-      </div>
+      {prefsLoading
+        ? <div className="text-center text-gray-500 my-6">Loading preferences...</div>
+        : (
+          <div className="flex flex-row justify-center gap-4 mb-4">
+            {(['all_tab', 'home', 'school'] as (keyof TabPrefs)[]).map(tabKey => (
+              <label key={tabKey} className="flex items-center gap-1 text-sm">
+                <input
+                  type="checkbox"
+                  checked={tabPrefs[tabKey]}
+                  onChange={() => handleTabPrefChange(tabKey)}
+                />
+                Show {tabKey === 'all_tab' ? 'All' : tabKey.charAt(0).toUpperCase() + tabKey.slice(1)} Tab
+              </label>
+            ))}
+          </div>
+        )
+      }
       <div className="flex gap-4 mb-4 justify-center">
         {enabledTabs.map(t => (
           <button
             key={t.key}
             className={tab === t.key ? 'font-bold underline' : ''}
-            onClick={() => setTab(t.key)}
+            onClick={() => setTab(t.key as 'all' | 'home' | 'school')}
           >
             {t.label}
           </button>
