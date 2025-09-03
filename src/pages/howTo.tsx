@@ -90,7 +90,10 @@ In your parent tab you can use the buttons at the top to decide which tabs to se
 </p>
 </li>
         </ul>
-      </div>
+<footer>
+		  <a href="https://www.paypal.com/ncp/payment/CAHZDEDTMYPPY>Donate To Creator</a>
+      </footer>
+	  </div>
     </main>
   )
 }
