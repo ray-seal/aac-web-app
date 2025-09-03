@@ -83,6 +83,7 @@ Once you have created an account you can upload your own images to use. Whatever
 <figcaption>
 In your parent tab you can use the buttons at the top to decide which tabs to see on the home page.
 	Use the "Home" and "School" check boxes next to each symbol to put themmin the desired tab.
+	</figcaption>
 <br />
 	<br />
 <p>Now your main screen should load automatically to your favourites and you are ready to start using the app.
