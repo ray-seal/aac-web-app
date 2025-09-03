@@ -4,6 +4,7 @@ import { supabase } from '../supabaseClient'
 import { getSignedImageUrl } from '../utils/uploadImage'
 
 const HOME_SCHOOL_KEY = 'aac_homeschool'
+const TAB_PREF_KEY = 'aac_tab_preferences'
 
 function isOnline() {
   return window.navigator.onLine
@@ -20,11 +21,23 @@ type HomeSchoolSymbol = {
   school?: boolean
 }
 
+type TabPrefs = { all: boolean; home: boolean; school: boolean }
+
+function getTabPrefs(): TabPrefs {
+  try {
+    return JSON.parse(localStorage.getItem(TAB_PREF_KEY) || '')
+      ?? { all: true, home: true, school: true }
+  } catch {
+    return { all: true, home: true, school: true }
+  }
+}
+
 export default function HomePage() {
   const [tab, setTab] = useState<'all' | 'home' | 'school'>('all')
   const [user, setUser] = useState<any>(null)
   const [symbols, setSymbols] = useState<HomeSchoolSymbol[]>([])
   const [signedUrls, setSignedUrls] = useState<{ [id: string]: string }>({})
+  const [tabPrefs, setTabPrefs] = useState<TabPrefs>(getTabPrefs())
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -80,6 +93,22 @@ export default function HomePage() {
     }
   }, [symbols])
 
+  // Only show enabled tabs in UI
+  const enabledTabs = [
+    tabPrefs.all && { key: 'all', label: 'All' },
+    tabPrefs.home && { key: 'home', label: 'Home' },
+    tabPrefs.school && { key: 'school', label: 'School' },
+  ].filter(Boolean) as { key: 'all' | 'home' | 'school'; label: string }[]
+
+  // Set tab to first enabled if current one disabled
+  useEffect(() => {
+    if (!tabPrefs[tab]) {
+      const first = enabledTabs[0]?.key || 'all'
+      setTab(first)
+    }
+    // eslint-disable-next-line
+  }, [tabPrefs])
+
   // Filtered symbols by tab
   const filtered = tab === 'all'
     ? symbols
@@ -111,10 +140,16 @@ export default function HomePage() {
       <div className="mb-4 flex justify-end">
         <Link to="/parent" className="text-blue-500 underline">Parent</Link>
       </div>
-      <div className="flex gap-4 mb-6">
-        <button className={tab === 'all' ? 'font-bold underline' : ''} onClick={() => setTab('all')}>All</button>
-        <button className={tab === 'home' ? 'font-bold underline' : ''} onClick={() => setTab('home')}>Home</button>
-        <button className={tab === 'school' ? 'font-bold underline' : ''} onClick={() => setTab('school')}>School</button>
+      <div className="flex gap-4 mb-6 justify-center">
+        {enabledTabs.map(t => (
+          <button
+            key={t.key}
+            className={tab === t.key ? 'font-bold underline' : ''}
+            onClick={() => setTab(t.key)}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
       {renderSymbolsGrid()}
     </div>
