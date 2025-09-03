@@ -4,53 +4,55 @@ import { aacSymbols, AacSymbol } from '../data/aac-symbols'
 import { uploadImage, getSignedImageUrl } from '../utils/uploadImage'
 import { useNavigate } from 'react-router-dom'
 
-const FAVOURITES_KEY = 'aac_favourites'
-const PIN_KEY = 'aac_parent_pin'
-const OFFLINE_QUEUE_KEY = 'aac_fav_queue'
+const HOME_SCHOOL_KEY = 'aac_homeschool'
+const OFFLINE_QUEUE_KEY = 'aac_homeschool_queue'
 
 function isOnline() {
-  return typeof navigator !== 'undefined' ? navigator.onLine : true
+  return window.navigator.onLine
+}
+
+type HomeSchoolSymbol = {
+  id: string | number
+  user_id: string
+  image_url: string
+  label: string
+  type: 'aac' | 'upload'
+  order: number
+  home?: boolean
+  school?: boolean
+  fileData?: string
 }
 
 type OfflineAction =
-  | { type: 'add'; data: any }
+  | { type: 'add'; data: HomeSchoolSymbol }
   | { type: 'remove'; id: number }
-  | { type: 'move'; id: number; direction: 'up' | 'down' }
+  | { type: 'update'; id: number; data: Partial<HomeSchoolSymbol> }
 
-function addToOfflineQueue(action: OfflineAction) {
-  const queue: OfflineAction[] = JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]')
-  queue.push(action)
-  localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue))
-}
 function clearOfflineQueue() {
   localStorage.removeItem(OFFLINE_QUEUE_KEY)
 }
 function getOfflineQueue(): OfflineAction[] {
-  return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]')
+  try {
+    return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]')
+  } catch {
+    return []
+  }
+}
+function addToOfflineQueue(action: OfflineAction) {
+  const queue = getOfflineQueue()
+  queue.push(action)
+  localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue))
 }
 
 export default function Parent() {
   const [user, setUser] = useState<any>(null)
-  const [profile, setProfile] = useState<any>(null)
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [mode, setMode] = useState<'signup' | 'signin'>('signup')
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
-
-  const [pinInput, setPinInput] = useState('')
-  const [pinSetInput, setPinSetInput] = useState('')
-  const [pinConfirmInput, setPinConfirmInput] = useState('')
-  const [pinError, setPinError] = useState('')
-  const [pinSetError, setPinSetError] = useState('')
-  const [pinUnlocked, setPinUnlocked] = useState(false)
-
-  const [favourites, setFavourites] = useState<any[]>([])
+  const [symbols, setSymbols] = useState<HomeSchoolSymbol[]>([])
   const [signedUrls, setSignedUrls] = useState<{ [id: number]: string }>({})
+  const [tab, setTab] = useState<'all' | 'home' | 'school'>('all')
   const [uploading, setUploading] = useState(false)
   const [uploadLabel, setUploadLabel] = useState('')
   const [uploadFile, setUploadFile] = useState<File | null>(null)
-
+  const [error, setError] = useState('')
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -66,121 +68,72 @@ export default function Parent() {
   }, [])
 
   useEffect(() => {
-    async function fetchProfile() {
-      if (!user) {
-        setProfile(null)
-        return
-      }
-      if (isOnline()) {
-        const { data } = await supabase
-          .from('profiles')
-          .select('parent_pin')
-          .eq('id', user.id)
-          .single()
-        setProfile(data)
-        if (data && data.parent_pin) {
-          localStorage.setItem(PIN_KEY, data.parent_pin)
-        }
-      } else {
-        const pin = localStorage.getItem(PIN_KEY)
-        if (pin) setProfile({ parent_pin: pin })
-        else setProfile(null)
-      }
+    if (!user) {
+      setSymbols([])
+      setSignedUrls({})
+      return
     }
-    fetchProfile()
+    fetchSymbols()
   }, [user])
 
-  useEffect(() => {
-    if (!user) return
-    fetchFavourites()
-  }, [user])
-
-  async function fetchFavourites() {
+  async function fetchSymbols() {
     if (isOnline()) {
       const { data } = await supabase
-        .from('favourites')
+        .from('homeschool')
         .select('*')
         .eq('user_id', user.id)
         .order('order', { ascending: true })
-      setFavourites(data ?? [])
-      localStorage.setItem(FAVOURITES_KEY, JSON.stringify(data ?? []))
+      setSymbols(data ?? [])
+      localStorage.setItem(HOME_SCHOOL_KEY, JSON.stringify(data ?? []))
     } else {
-      const offlineFavs = localStorage.getItem(FAVOURITES_KEY)
-      setFavourites(offlineFavs ? JSON.parse(offlineFavs) : [])
+      const offline = localStorage.getItem(HOME_SCHOOL_KEY)
+      setSymbols(offline ? JSON.parse(offline) : [])
     }
   }
 
   useEffect(() => {
     async function loadSignedUrls() {
-      const uploads = favourites.filter(f => f.type !== 'aac')
+      const uploads = symbols.filter(f => f.type !== 'aac')
       const urlMap: { [id: number]: string } = {}
-      await Promise.all(uploads.map(async (fav) => {
-        urlMap[fav.id] = await getSignedImageUrl(fav.image_url)
-      }))
+      await Promise.all(
+        uploads.map(async sym => {
+          urlMap[sym.id] = await getSignedImageUrl(sym.image_url)
+        })
+      )
       setSignedUrls(urlMap)
     }
-    if (favourites.length > 0) loadSignedUrls()
-    else setSignedUrls({})
-  }, [favourites])
-
-  const handleAuth = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
-    setLoading(true)
-    try {
-      if (!isOnline()) {
-        setError('Offline: Cannot sign in or sign up')
-        return
-      }
-      if (mode === 'signup') {
-        const { error } = await supabase.auth.signUp({ email, password })
-        if (error) throw error
-        setMode('signin')
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password })
-        if (error) throw error
-      }
-    } catch (err: any) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
+    if (symbols.length > 0) {
+      loadSignedUrls()
+    } else {
+      setSignedUrls({})
     }
-  }
+  }, [symbols])
 
-  const handleSignOut = async () => {
-    if (isOnline()) {
-      await supabase.auth.signOut()
-    }
-    setUser(null)
-    setFavourites([])
-    setProfile(null)
-    setPinUnlocked(false)
-  }
-
+  // Upload new image logic
   async function handleUploadSubmit(e: React.FormEvent) {
     e.preventDefault()
+    setError('')
     if (!user || !uploadFile || !uploadLabel) return
-
-    const maxOrder = favourites.length > 0 ? Math.max(...favourites.map(f => f.order ?? 0)) : 0
+    const order = symbols.length > 0 ? Math.max(...symbols.map(f => f.order ?? 0)) + 1 : 1
 
     if (!isOnline()) {
-      // Offline mode: Convert file to base64 and store in offline queue
       const reader = new FileReader()
       reader.onload = () => {
-        // Store the base64 image in offline queue
-        const newFav = {
+        const newSym: HomeSchoolSymbol = {
           id: Date.now(),
           user_id: user.id,
-          image_url: '', // will be set after upload
+          image_url: '',
           label: uploadLabel,
           type: 'upload',
-          order: maxOrder + 1,
-          fileData: reader.result, // base64 string
+          order,
+          home: false,
+          school: false,
+          fileData: reader.result as string,
         }
-        const newFavs = [...favourites, newFav]
-        setFavourites(newFavs)
-        localStorage.setItem(FAVOURITES_KEY, JSON.stringify(newFavs))
-        addToOfflineQueue({ type: 'add', data: newFav })
+        const updated = [...symbols, newSym]
+        setSymbols(updated)
+        localStorage.setItem(HOME_SCHOOL_KEY, JSON.stringify(updated))
+        addToOfflineQueue({ type: 'add', data: newSym })
         setUploadLabel('')
         setUploadFile(null)
       }
@@ -193,137 +146,81 @@ export default function Parent() {
     setUploading(false)
     if (!path) return
     const { error } = await supabase
-      .from('favourites')
-      .insert([{ user_id: user.id, image_url: path, label: uploadLabel, type: 'upload', order: maxOrder + 1 }])
+      .from('homeschool')
+      .insert([{ user_id: user.id, image_url: path, label: uploadLabel, type: 'upload', order, home: false, school: false }])
     if (!error) {
       setUploadLabel('')
       setUploadFile(null)
-      fetchFavourites()
-    } else if (error) {
+      fetchSymbols()
+    } else {
       setError(error.message)
     }
   }
 
-  async function handleRemoveFavourite(favId: number) {
-    if (!isOnline()) {
-      const newFavs = favourites.filter(f => f.id !== favId)
-      setFavourites(newFavs)
-      localStorage.setItem(FAVOURITES_KEY, JSON.stringify(newFavs))
-      addToOfflineQueue({ type: 'remove', id: favId })
-      return
-    }
-    await supabase.from('favourites').delete().eq('id', favId)
-    setFavourites(favourites.filter(f => f.id !== favId))
-    fetchFavourites()
-  }
-
-  async function addAacToFavourites(symbol: AacSymbol) {
+  // Toggle Home/School for AAC or Upload
+  async function handleToggleHomeSchool(sym: AacSymbol, home: boolean, school: boolean) {
     if (!user) return
-    const exists = favourites.some(f => f.type === 'aac' && f.label === symbol.text)
-    if (exists) return
-    const maxOrder = favourites.length > 0 ? Math.max(...favourites.map(f => f.order ?? 0)) : 0
-
-    if (!isOnline()) {
-      const newFav = {
+    const exists = symbols.find(f => f.label === sym.text && f.type === 'aac')
+    if (!exists) {
+      const order = symbols.length > 0 ? Math.max(...symbols.map(f => f.order ?? 0)) + 1 : 1
+      const newSym: HomeSchoolSymbol = {
         id: Date.now(),
         user_id: user.id,
-        image_url: symbol.imagePath,
-        label: symbol.text,
+        image_url: sym.imagePath,
+        label: sym.text,
         type: 'aac',
-        order: maxOrder + 1
+        order,
+        home,
+        school,
       }
-      const newFavs = [...favourites, newFav]
-      setFavourites(newFavs)
-      localStorage.setItem(FAVOURITES_KEY, JSON.stringify(newFavs))
-      addToOfflineQueue({ type: 'add', data: newFav })
-      return
-    }
-
-    const { error } = await supabase
-      .from('favourites')
-      .insert([{ user_id: user.id, image_url: symbol.imagePath, label: symbol.text, type: 'aac', order: maxOrder + 1 }])
-    if (!error) fetchFavourites()
-    else if (error) setError(error.message)
-  }
-
-  async function moveFavourite(favId: number, direction: 'up' | 'down') {
-    const idx = favourites.findIndex(f => f.id === favId)
-    if (idx === -1) return
-    const targetIdx = direction === 'up' ? idx - 1 : idx + 1
-    if (targetIdx < 0 || targetIdx >= favourites.length) return
-
-    const fav = favourites[idx]
-    const targetFav = favourites[targetIdx]
-    const updated = [...favourites]
-    updated[idx] = targetFav
-    updated[targetIdx] = fav
-
-    [updated[idx].order, updated[targetIdx].order] = [updated[targetIdx].order, updated[idx].order]
-
-    if (!isOnline()) {
-      setFavourites(updated)
-      localStorage.setItem(FAVOURITES_KEY, JSON.stringify(updated))
-      addToOfflineQueue({ type: 'move', id: fav.id, direction })
-      return
-    }
-
-    await supabase
-      .from('favourites')
-      .update({ order: targetFav.order })
-      .eq('id', fav.id)
-    await supabase
-      .from('favourites')
-      .update({ order: fav.order })
-      .eq('id', targetFav.id)
-
-    setFavourites(updated)
-    fetchFavourites()
-  }
-
-  async function handleSetPin(e: React.FormEvent) {
-    e.preventDefault()
-    setPinSetError('')
-    if (!/^\d{4}$/.test(pinSetInput)) {
-      setPinSetError('PIN must be exactly 4 digits')
-      return
-    }
-    if (pinSetInput !== pinConfirmInput) {
-      setPinSetError('PINs do not match')
-      return
-    }
-    if (!isOnline()) {
-      localStorage.setItem(PIN_KEY, pinSetInput)
-      setProfile({ ...profile, parent_pin: pinSetInput })
-      setPinUnlocked(true)
-      return
-    }
-    const { error } = await supabase
-      .from('profiles')
-      .update({ parent_pin: pinSetInput })
-      .eq('id', user.id)
-    if (error) {
-      setPinSetError('Failed to set PIN')
-      return
-    }
-    setProfile({ ...profile, parent_pin: pinSetInput })
-    localStorage.setItem(PIN_KEY, pinSetInput)
-    setPinUnlocked(true)
-  }
-
-  function handleCheckPin(e: React.FormEvent) {
-    e.preventDefault()
-    setPinError('')
-    const pinToCheck = profile?.parent_pin || localStorage.getItem(PIN_KEY)
-    if (pinInput === pinToCheck) {
-      setPinUnlocked(true)
-      setPinInput('')
+      setSymbols([...symbols, newSym])
+      localStorage.setItem(HOME_SCHOOL_KEY, JSON.stringify([...symbols, newSym]))
+      if (isOnline()) {
+        await supabase.from('homeschool').insert([newSym])
+      } else {
+        addToOfflineQueue({ type: 'add', data: newSym })
+      }
     } else {
-      setPinError('Incorrect PIN. Please try again.')
-      setPinInput('')
+      const updated = symbols.map(s =>
+        s.id === exists.id ? { ...s, home, school } : s
+      )
+      setSymbols(updated)
+      localStorage.setItem(HOME_SCHOOL_KEY, JSON.stringify(updated))
+      if (isOnline()) {
+        await supabase.from('homeschool').update({ home, school }).eq('id', exists.id)
+      } else {
+        addToOfflineQueue({ type: 'update', id: exists.id as number, data: { home, school } })
+      }
     }
   }
 
-  // Sync offline queue to Supabase when back online (including image uploads)
+  // Toggle for uploads after upload
+  async function handleUploadToggleHomeSchool(sym: HomeSchoolSymbol, home: boolean, school: boolean) {
+    const updated = symbols.map(s =>
+      s.id === sym.id ? { ...s, home, school } : s
+    )
+    setSymbols(updated)
+    localStorage.setItem(HOME_SCHOOL_KEY, JSON.stringify(updated))
+    if (isOnline()) {
+      await supabase.from('homeschool').update({ home, school }).eq('id', sym.id)
+    } else {
+      addToOfflineQueue({ type: 'update', id: sym.id as number, data: { home, school } })
+    }
+  }
+
+  // Remove symbol
+  async function handleRemoveSymbol(id: number) {
+    const updated = symbols.filter(f => Number(f.id) !== Number(id))
+    setSymbols(updated)
+    localStorage.setItem(HOME_SCHOOL_KEY, JSON.stringify(updated))
+    if (isOnline()) {
+      await supabase.from('homeschool').delete().eq('id', id)
+    } else {
+      addToOfflineQueue({ type: 'remove', id })
+    }
+  }
+
+  // Sync offline queue
   useEffect(() => {
     if (!user) return
     function syncOfflineQueue() {
@@ -334,237 +231,55 @@ export default function Parent() {
       Promise.all(queue.map(async action => {
         if (action.type === 'add') {
           const { id, fileData, ...toInsert } = action.data
-          // If it's an upload with fileData (base64), upload image first
           if (fileData) {
-            // Convert base64 to File
             try {
-              const res = await fetch(fileData)
+              const res = await fetch(fileData as string)
               const blob = await res.blob()
               const file = new File([blob], "offline-upload.png", { type: blob.type })
               const path = await uploadImage(file, toInsert.user_id)
               if (path) {
                 toInsert.image_url = path
               } else {
-                // If upload failed, skip
                 return
               }
-            } catch (err) {
-              // Skip this queue item if file conversion/upload fails
+            } catch {
               return
             }
           }
-          // Prevent duplicate before inserting (label, type, user_id)
-          const { data: existing } = await supabase
-            .from('favourites')
-            .select('*')
-            .eq('user_id', toInsert.user_id)
-            .eq('label', toInsert.label)
-            .eq('type', toInsert.type)
-            .single()
-          if (!existing) {
-            await supabase
-              .from('favourites')
-              .insert([{ ...toInsert }])
-          }
+          await supabase.from('homeschool').insert([{ ...toInsert }])
         } else if (action.type === 'remove') {
-          await supabase
-            .from('favourites')
-            .delete()
-            .eq('id', action.id)
-        } else if (action.type === 'move') {
-          // Move logic (order swapping) as before
-          const favs = [...favourites]
-          const idx = favs.findIndex(f => f.id === action.id)
-          const targetIdx = action.direction === 'up' ? idx - 1 : idx + 1
-          if (idx === -1 || targetIdx < 0 || targetIdx >= favs.length) return
-          const fav = favs[idx]
-          const targetFav = favs[targetIdx]
-          await supabase
-            .from('favourites')
-            .update({ order: targetFav.order })
-            .eq('id', fav.id)
-          await supabase
-            .from('favourites')
-            .update({ order: fav.order })
-            .eq('id', targetFav.id)
+          await supabase.from('homeschool').delete().eq('id', action.id)
+        } else if (action.type === 'update') {
+          await supabase.from('homeschool').update(action.data).eq('id', action.id)
         }
       })).then(() => {
         clearOfflineQueue()
-        fetchFavourites()
+        fetchSymbols()
       })
     }
-
     window.addEventListener('online', syncOfflineQueue)
     if (isOnline()) syncOfflineQueue()
     return () => window.removeEventListener('online', syncOfflineQueue)
-    // eslint-disable-next-line
-  }, [user, favourites])
+  }, [user, symbols])
 
-  // SIGNUP/SIGNIN SCREEN
-  if (!user) {
-    return (
-      <div className="max-w-md mx-auto mt-10 p-4 bg-white rounded shadow">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold">
-            {mode === 'signup' ? 'Parent Sign Up' : 'Parent Sign In'}
-          </h2>
-          <button
-            onClick={() => navigate('/how-to')}
-            className="bg-gray-400 text-white px-4 py-2 rounded"
-          >
-            How To Guide
-          </button>
-        </div>
-        <form onSubmit={handleAuth} className="flex flex-col gap-3">
-          <input
-            type="email"
-            required
-            placeholder="Email"
-            className="border p-2 rounded"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-          />
-          <input
-            type="password"
-            required
-            placeholder="Password"
-            className="border p-2 rounded"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-          />
-          <button
-            type="submit"
-            className="bg-blue-600 text-white px-4 py-2 rounded"
-            disabled={loading}
-          >
-            {loading ? 'Loading...' : (mode === 'signup' ? 'Sign Up' : 'Sign In')}
-          </button>
-          <button
-            type="button"
-            className="text-blue-500 underline"
-            onClick={() => setMode(mode === 'signup' ? 'signin' : 'signup')}
-          >
-            {mode === 'signup' ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
-          </button>
-          {error && <div className="text-red-600">{error}</div>}
-        </form>
-      </div>
-    )
-  }
+  // Filtering by tab
+  const filtered = tab === 'all'
+    ? symbols
+    : tab === 'home'
+      ? symbols.filter(s => s.home)
+      : symbols.filter(s => s.school)
 
-  // PIN UNLOCK SCREEN
-  if (profile && profile.parent_pin && !pinUnlocked) {
-    return (
-      <div className="max-w-xs mx-auto mt-20 p-6 bg-white rounded shadow flex flex-col items-center">
-        <div className="flex justify-between items-center w-full mb-2">
-          <h2 className="text-lg font-semibold">Enter Parent PIN</h2>
-          <button
-            onClick={() => navigate('/how-to')}
-            className="bg-gray-400 text-white px-4 py-2 rounded text-xs"
-          >
-            How To Guide
-          </button>
-        </div>
-        <form onSubmit={handleCheckPin} className="flex flex-col gap-3 w-full">
-          <input
-            type="password"
-            pattern="\d{4}"
-            inputMode="numeric"
-            maxLength={4}
-            value={pinInput}
-            onChange={e => setPinInput(e.target.value.replace(/\D/g, '').slice(0,4))}
-            className="border p-2 rounded text-center tracking-widest text-xl"
-            placeholder="4-digit PIN"
-            autoFocus
-          />
-          <button
-            type="submit"
-            className="bg-blue-600 text-white py-2 rounded"
-          >
-            Unlock
-          </button>
-          {pinError && <div className="text-red-600 text-center">{pinError}</div>}
-        </form>
-      </div>
-    )
-  }
-
-  // SET PIN SCREEN
-  if (profile && !profile.parent_pin) {
-    return (
-      <div className="max-w-xs mx-auto mt-20 p-6 bg-white rounded shadow flex flex-col items-center">
-        <div className="flex justify-between items-center w-full mb-2">
-          <h2 className="text-lg font-semibold">Set Parent PIN</h2>
-          <button
-            onClick={() => navigate('/how-to')}
-            className="bg-gray-400 text-white px-4 py-2 rounded text-xs"
-          >
-            How To Guide
-          </button>
-        </div>
-        <form onSubmit={handleSetPin} className="flex flex-col gap-3 w-full">
-          <input
-            type="password"
-            pattern="\d{4}"
-            inputMode="numeric"
-            maxLength={4}
-            value={pinSetInput}
-            onChange={e => setPinSetInput(e.target.value.replace(/\D/g, '').slice(0,4))}
-            className="border p-2 rounded text-center tracking-widest text-xl"
-            placeholder="Choose 4-digit PIN"
-            autoFocus
-            required
-          />
-          <input
-            type="password"
-            pattern="\d{4}"
-            inputMode="numeric"
-            maxLength={4}
-            value={pinConfirmInput}
-            onChange={e => setPinConfirmInput(e.target.value.replace(/\D/g, '').slice(0,4))}
-            className="border p-2 rounded text-center tracking-widest text-xl"
-            placeholder="Confirm 4-digit PIN"
-            required
-          />
-          <button
-            type="submit"
-            className="bg-green-600 text-white py-2 rounded"
-          >
-            Set PIN
-          </button>
-          {pinSetError && <div className="text-red-600 text-center">{pinSetError}</div>}
-        </form>
-      </div>
-    )
-  }
-
-  // MAIN PARENT PAGE
   return (
     <div className="max-w-4xl mx-auto mt-10 p-4 bg-white rounded shadow">
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex gap-2">
-          <button
-            className="bg-gray-400 text-white px-4 py-2 rounded"
-            onClick={() => navigate('/')}
-          >
-            Back
-          </button>
-          <button onClick={() => navigate('/how-to')}
-          className="bg-gray-400 text-white px-4 py-2 rounded">How To Guide</button>
-
-          <h2 className="text-2xl font-bold">Welcome, Parent!</h2>
-        </div>
-        <button
-          className="bg-gray-500 text-white px-4 py-2 rounded"
-          onClick={handleSignOut}
-        >
-          Sign Out
-        </button>
+      <div className="flex gap-4 mb-4">
+        <button className={tab === 'all' ? 'font-bold underline' : ''} onClick={() => setTab('all')}>All</button>
+        <button className={tab === 'home' ? 'font-bold underline' : ''} onClick={() => setTab('home')}>Home</button>
+        <button className={tab === 'school' ? 'font-bold underline' : ''} onClick={() => setTab('school')}>School</button>
       </div>
-      <p className="mb-4">You are signed in as <span className="font-mono">{user.email}</span></p>
 
+      {/* Upload new symbol */}
       <div className="mb-8">
-        <h3 className="font-bold mb-2">Upload new favourite</h3>
+        <h3 className="font-bold mb-2">Upload new image symbol</h3>
         <form onSubmit={handleUploadSubmit} className="flex gap-2 items-end flex-wrap">
           <input
             type="file"
@@ -594,67 +309,117 @@ export default function Parent() {
         {error && <div className="text-red-600 mt-2">{error}</div>}
       </div>
 
-      <div className="mb-8">
-        <h3 className="font-bold mb-2">All AAC Symbols (add to favourites)</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4">
-          {aacSymbols.map((symbol: AacSymbol) => (
-            <div key={symbol.id} className="border rounded p-2 flex flex-col items-center bg-gray-50">
-              <img
-                src={symbol.imagePath}
-                alt={symbol.text}
-                className="w-16 h-16 object-cover rounded mb-2"
-              />
-              <div className="text-center text-xs font-medium mb-1">{symbol.text}</div>
+      {/* Home/School checkboxes for AAC */}
+      <div className="mb-4 flex gap-2 flex-wrap">
+        {aacSymbols.map(sym => {
+          const exist = symbols.find(s => s.label === sym.text && s.type === 'aac')
+          return (
+            <div key={sym.text} className="border rounded px-2 py-1 flex items-center gap-3 bg-gray-50 mb-2">
+              <img src={sym.imagePath} alt={sym.text} className="w-8 h-8 object-cover rounded" />
+              <span className="text-xs">{sym.text}</span>
+              <label className="flex items-center gap-1 text-xs">
+                <input
+                  type="checkbox"
+                  checked={!!exist?.home}
+                  onChange={e =>
+                    handleToggleHomeSchool(sym, e.target.checked, exist?.school || false)
+                  }
+                />
+                Home
+              </label>
+              <label className="flex items-center gap-1 text-xs">
+                <input
+                  type="checkbox"
+                  checked={!!exist?.school}
+                  onChange={e =>
+                    handleToggleHomeSchool(sym, exist?.home || false, e.target.checked)
+                  }
+                />
+                School
+              </label>
+              {!!exist && (
+                <button
+                  onClick={() => handleRemoveSymbol(Number(exist.id))}
+                  className="ml-2 px-1 py-0 bg-red-400 text-white rounded text-xs"
+                  title="Remove from Home/School"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Home/School checkboxes for uploads */}
+      <div className="mb-4 flex gap-2 flex-wrap">
+        {symbols
+          .filter(s => s.type === 'upload')
+          .map(sym => (
+            <div key={sym.id} className="border rounded px-2 py-1 flex items-center gap-3 bg-gray-50 mb-2">
+              <img src={signedUrls[sym.id] || sym.image_url} alt={sym.label} className="w-8 h-8 object-cover rounded" />
+              <span className="text-xs">{sym.label}</span>
+              <label className="flex items-center gap-1 text-xs">
+                <input
+                  type="checkbox"
+                  checked={!!sym.home}
+                  onChange={e =>
+                    handleUploadToggleHomeSchool(sym, e.target.checked, sym.school || false)
+                  }
+                />
+                Home
+              </label>
+              <label className="flex items-center gap-1 text-xs">
+                <input
+                  type="checkbox"
+                  checked={!!sym.school}
+                  onChange={e =>
+                    handleUploadToggleHomeSchool(sym, sym.home || false, e.target.checked)
+                  }
+                />
+                School
+              </label>
               <button
-                onClick={() => addAacToFavourites(symbol)}
-                className="px-2 py-1 bg-green-500 text-white rounded text-xs"
-                disabled={favourites.some(f => f.type === 'aac' && f.label === symbol.text)}
+                onClick={() => handleRemoveSymbol(Number(sym.id))}
+                className="ml-2 px-1 py-0 bg-red-400 text-white rounded text-xs"
+                title="Remove upload"
               >
-                {favourites.some(f => f.type === 'aac' && f.label === symbol.text) ? 'Added' : 'Add to Favourites'}
+                ✕
+              </button>
+            </div>
+          ))}
+      </div>
+
+      <hr className="my-6" />
+      <div>
+        <h3 className="font-bold mb-2">Your Symbols</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4 mt-4">
+          {filtered.length === 0 && (
+            <p className="col-span-full text-gray-600 text-center">(No symbols yet)</p>
+          )}
+          {filtered.map((sym: any) => (
+            <div key={sym.id} className="border rounded p-2 flex flex-col items-center bg-gray-50">
+              <img
+                src={sym.type === 'aac'
+                  ? sym.image_url
+                  : (signedUrls[sym.id] || sym.image_url)}
+                alt={sym.label}
+                className="w-16 h-16 object-cover rounded mb-2"
+                style={{ background: '#E0E7EF' }}
+              />
+              <div className="text-center text-xs font-medium mb-1">{sym.label}</div>
+              <div className="flex gap-1 mb-1 text-xs">
+                <span>{sym.home ? 'Home' : ''}{sym.home && sym.school ? ',' : ''}{sym.school ? 'School' : ''}</span>
+              </div>
+              <button
+                onClick={() => handleRemoveSymbol(Number(sym.id))}
+                className="px-2 py-1 bg-red-500 text-white rounded text-xs"
+              >
+                Remove
               </button>
             </div>
           ))}
         </div>
-      </div>
-
-      <h3 className="font-bold mb-2">Your Favourites</h3>
-      <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4 mt-4">
-        {favourites.length === 0 && (
-          <p className="col-span-full text-gray-600 text-center">(No favourites yet)</p>
-        )}
-        {favourites.map((fav: any, idx) => (
-          <div key={fav.id} className="border rounded p-2 flex flex-col items-center bg-gray-50">
-            <img
-              src={fav.type === 'aac'
-                ? fav.image_url
-                : (signedUrls[fav.id] || '')}
-              alt={fav.label}
-              className="w-16 h-16 object-cover rounded mb-2"
-              style={{ background: '#E0E7EF' }}
-            />
-            <div className="text-center text-xs font-medium mb-1">{fav.label}</div>
-            <div className="flex gap-1 mb-1">
-              <button
-                disabled={idx === 0}
-                onClick={() => moveFavourite(fav.id, 'up')}
-                className="px-1 py-0 bg-blue-400 text-white rounded text-xs"
-                title="Move up"
-              >↑</button>
-              <button
-                disabled={idx === favourites.length - 1}
-                onClick={() => moveFavourite(fav.id, 'down')}
-                className="px-1 py-0 bg-blue-400 text-white rounded text-xs"
-                title="Move down"
-              >↓</button>
-            </div>
-            <button
-              onClick={() => handleRemoveFavourite(fav.id)}
-              className="px-2 py-1 bg-red-500 text-white rounded text-xs"
-            >
-              Remove
-            </button>
-          </div>
-        ))}
       </div>
     </div>
   )
