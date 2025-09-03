@@ -37,7 +37,8 @@ export default function HomePage() {
   const [user, setUser] = useState<any>(null)
   const [symbols, setSymbols] = useState<HomeSchoolSymbol[]>([])
   const [signedUrls, setSignedUrls] = useState<{ [id: string]: string }>({})
-  const [tabPrefs] = useState<TabPrefs>(getTabPrefs()) // FIX: remove setTabPrefs, only using tabPrefs
+  const [tabPrefs] = useState<TabPrefs>(getTabPrefs())
+  const [panel, setPanel] = useState<HomeSchoolSymbol[]>([])
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -116,21 +117,94 @@ export default function HomePage() {
       ? symbols.filter(s => s.home)
       : symbols.filter(s => s.school)
 
+  function handleSymbolClick(sym: HomeSchoolSymbol) {
+    setPanel(prev => [...prev, sym])
+  }
+
+  function handlePanelRemove(idx: number) {
+    setPanel(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  function handlePanelClear() {
+    setPanel([])
+  }
+
+  function handleSpeak() {
+    if ('speechSynthesis' in window && panel.length) {
+      const utter = new window.SpeechSynthesisUtterance(
+        panel.map(s => s.label).join(' ')
+      )
+      window.speechSynthesis.speak(utter)
+    }
+  }
+
   function renderSymbolsGrid() {
     if (!filtered.length)
       return <div className="p-4 text-center text-gray-500">No symbols yet.</div>
     return (
       <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4">
         {filtered.map((sym: any) => (
-          <div key={sym.id} className="border rounded p-2 flex flex-col items-center bg-gray-50">
+          <button
+            key={sym.id}
+            className="border rounded p-2 flex flex-col items-center bg-gray-50 hover:bg-blue-50 transition"
+            onClick={() => handleSymbolClick(sym)}
+            aria-label={`Add ${sym.label} to communication panel`}
+            type="button"
+          >
             <img
               src={sym.type === 'aac' ? sym.image_url : (signedUrls[String(sym.id)] || sym.image_url)}
               alt={sym.label}
               className="w-16 h-16 object-cover rounded mb-2"
             />
             <div className="text-center text-xs font-medium mb-1">{sym.label}</div>
-          </div>
+          </button>
         ))}
+      </div>
+    )
+  }
+
+  function renderPanel() {
+    return (
+      <div className="mb-6">
+        <div className="flex flex-wrap items-center gap-2 min-h-[64px] bg-gray-100 p-2 rounded">
+          {panel.length === 0 && (
+            <span className="text-gray-400 text-sm">Tap symbols to build your message.</span>
+          )}
+          {panel.map((sym, idx) => (
+            <div key={idx} className="flex flex-col items-center relative">
+              <button
+                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 text-xs"
+                type="button"
+                aria-label="Remove symbol"
+                onClick={() => handlePanelRemove(idx)}
+              >×</button>
+              <img
+                src={sym.type === 'aac' ? sym.image_url : (signedUrls[String(sym.id)] || sym.image_url)}
+                alt={sym.label}
+                className="w-10 h-10 object-cover rounded"
+              />
+              <span className="text-xs">{sym.label}</span>
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-2 mt-2">
+          <button
+            type="button"
+            className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
+            onClick={handleSpeak}
+            disabled={panel.length === 0}
+          >
+            Speak
+          </button>
+          <button
+            type="button"
+            className="bg-gray-400 text-white px-4 py-2 rounded disabled:opacity-50"
+            onClick={handlePanelClear}
+            disabled={panel.length === 0}
+          >
+            Clear
+          </button>
+        </div>
       </div>
     )
   }
@@ -140,6 +214,7 @@ export default function HomePage() {
       <div className="mb-4 flex justify-end">
         <Link to="/parent" className="text-blue-500 underline">Parent</Link>
       </div>
+      {renderPanel()}
       <div className="flex gap-4 mb-6 justify-center">
         {enabledTabs.map(t => (
           <button
