@@ -9,21 +9,36 @@ import { supabase } from './supabaseClient'
 
 function ParentOrAuth() {
   const [user, setUser] = useState<any>(undefined);
-  const location = useLocation();
+  const [authError, setAuthError] = useState<string | null>(null);
+
   useEffect(() => {
     let mounted = true;
-    supabase.auth.getUser().then(({ data }) => {
-      if (mounted) setUser(data.user ?? null);
-    });
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
+    let unsubscribe: (() => void) | undefined;
+
+    (async () => {
+      try {
+        const { data, error } = await supabase.auth.getUser();
+        if (error) setAuthError(error.message);
+        if (mounted) setUser(data.user ?? null);
+      } catch (e) {
+        setAuthError(String(e));
+        if (mounted) setUser(null);
+      }
+
+      const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+        if (mounted) setUser(session?.user ?? null);
+      });
+      unsubscribe = () => listener?.subscription?.unsubscribe?.();
+    })();
+
     return () => {
       mounted = false;
-      listener?.subscription.unsubscribe();
+      if (unsubscribe) unsubscribe();
     };
-  }, [location]);
+  }, []); // only run once on mount
+
   if (user === undefined) return <div className="text-center mt-10">Loading...</div>;
+  if (authError) return <div className="text-center mt-10 text-red-600">{authError}</div>;
   if (!user) return <AuthPage />;
   return <Parent />;
 }
