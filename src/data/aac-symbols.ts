@@ -7,8 +7,8 @@ export interface AacSymbol {
 
 export const aacSymbols: AacSymbol[] = [
   {
-    id: 'i want',
-    text: 'I want',
+    id: 'i would like',
+    text: 'I would like',
     imagePath: '/aac-images/i-want.jpg',
     category: 'actions'
   },
