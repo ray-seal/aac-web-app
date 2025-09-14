@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { supabase } from '../supabaseClient'
+import { useState, useEffect } from 'react'
+import { useRequireAuth } from '../hooks/useRequireAuth'
 import { aacSymbols, AacSymbol } from '../data/aac-symbols'
 import { uploadImage, getSignedImageUrl } from '../utils/uploadImage'
+import { supabase } from '../supabaseClient'
 
 const HOME_SCHOOL_KEY = 'aac_homeschool'
 const OFFLINE_QUEUE_KEY = 'aac_homeschool_queue'
@@ -87,7 +87,7 @@ function getSymbolImgSrc(sym: HomeSchoolSymbol, signedUrls: { [id: string]: stri
 }
 
 export default function Parent() {
-  const navigate = useNavigate();
+  const [user, loadingAuth] = useRequireAuth();
 
   // PIN logic
   const [showPinPrompt, setShowPinPrompt] = useState(true)
@@ -96,7 +96,6 @@ export default function Parent() {
   const [pinSetMode, setPinSetMode] = useState(false)
   const [pinConfirm, setPinConfirm] = useState('')
 
-  const [user, setUser] = useState<any>(null)
   const [symbols, setSymbols] = useState<HomeSchoolSymbol[]>([])
   const [signedUrls, setSignedUrls] = useState<{ [id: string]: string }>({})
   const [tab, setTab] = useState<'all' | 'home' | 'school'>('all')
@@ -106,7 +105,6 @@ export default function Parent() {
   const [error, setError] = useState('')
   const [tabPrefs, setTabPrefs] = useState<TabPrefs>({ all_tab: true, home: true, school: true })
   const [loadingPrefs, setLoadingPrefs] = useState(true)
-  const [loadingAuth, setLoadingAuth] = useState(true)
 
   // PIN check on mount
   useEffect(() => {
@@ -157,19 +155,8 @@ export default function Parent() {
     setShowPinPrompt(true)
   }
 
-  // Fetch user and tab prefs from localStorage only (no Supabase)
+  // Fetch tab prefs from localStorage only (no Supabase)
   useEffect(() => {
-    if (showPinPrompt) return;
-    // Auth
-    setLoadingAuth(true);
-    supabase.auth.getUser().then(({ data }) => {
-      setUser(data.user ?? null)
-      setLoadingAuth(false);
-      if (!data.user) {
-        navigate('/auth');
-      }
-    })
-    // Tab prefs from localStorage only (robust, always set loadingPrefs false)
     setLoadingPrefs(true);
     const cached = localStorage.getItem(TAB_PREFS_KEY);
     if (cached) {
@@ -179,7 +166,7 @@ export default function Parent() {
       localStorage.setItem(TAB_PREFS_KEY, JSON.stringify({ all_tab: true, home: true, school: true }));
     }
     setLoadingPrefs(false);
-  }, [showPinPrompt, navigate]);
+  }, []);
 
   useEffect(() => {
     if (!user) {
