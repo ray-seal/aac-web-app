@@ -56,6 +56,7 @@ function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/parent" element={<ParentOrAuth />} />
+        <Route path="/auth" element={<AuthPage />} /> {/* Added /auth route */}
         <Route path="/how-to" element={<HowToPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
