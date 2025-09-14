@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom'
 import HomePage from './pages/HomePage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import HowToPage from './pages/howTo'
@@ -10,6 +10,7 @@ import { supabase } from './supabaseClient'
 function ParentOrAuth() {
   const [user, setUser] = useState<any>(undefined);
   const [authError, setAuthError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     let mounted = true;
@@ -35,11 +36,17 @@ function ParentOrAuth() {
       mounted = false;
       if (unsubscribe) unsubscribe();
     };
-  }, []); // only run once on mount
+  }, []);
+
+  useEffect(() => {
+    // If there is an auth error or not authenticated, redirect to /auth
+    if (authError || user === null) {
+      navigate("/auth", { replace: true });
+    }
+  }, [authError, user, navigate]);
 
   if (user === undefined) return <div className="text-center mt-10">Loading...</div>;
-  if (authError) return <div className="text-center mt-10 text-red-600">{authError}</div>;
-  if (!user) return <AuthPage />;
+  if (!user) return null; // Show nothing while redirecting
   return <Parent />;
 }
 
