@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { aacSymbols, AacSymbol } from '../data/aac-symbols'
 import { uploadImage, getSignedImageUrl } from '../utils/uploadImage'
@@ -86,6 +87,8 @@ function getSymbolImgSrc(sym: HomeSchoolSymbol, signedUrls: { [id: string]: stri
 }
 
 export default function Parent() {
+  const navigate = useNavigate();
+
   // PIN logic
   const [showPinPrompt, setShowPinPrompt] = useState(true)
   const [pinInput, setPinInput] = useState('')
@@ -103,6 +106,7 @@ export default function Parent() {
   const [error, setError] = useState('')
   const [tabPrefs, setTabPrefs] = useState<TabPrefs>({ all_tab: true, home: true, school: true })
   const [loadingPrefs, setLoadingPrefs] = useState(true)
+  const [loadingAuth, setLoadingAuth] = useState(true)
 
   // PIN check on mount
   useEffect(() => {
@@ -157,8 +161,13 @@ export default function Parent() {
   useEffect(() => {
     if (showPinPrompt) return;
     // Auth
+    setLoadingAuth(true);
     supabase.auth.getUser().then(({ data }) => {
       setUser(data.user ?? null)
+      setLoadingAuth(false);
+      if (!data.user) {
+        navigate('/auth');
+      }
     })
     // Tab prefs from localStorage only (robust, always set loadingPrefs false)
     setLoadingPrefs(true);
@@ -170,7 +179,7 @@ export default function Parent() {
       localStorage.setItem(TAB_PREFS_KEY, JSON.stringify({ all_tab: true, home: true, school: true }));
     }
     setLoadingPrefs(false);
-  }, [showPinPrompt]);
+  }, [showPinPrompt, navigate]);
 
   useEffect(() => {
     if (!user) {
@@ -392,6 +401,14 @@ export default function Parent() {
     if (isOnline()) syncOfflineQueue()
     return () => window.removeEventListener('online', syncOfflineQueue)
   }, [user, symbols])
+
+  if (loadingAuth) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div>Checking authentication...</div>
+      </div>
+    );
+  }
 
   if (showPinPrompt) {
     return (
