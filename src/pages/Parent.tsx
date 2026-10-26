@@ -337,6 +337,35 @@ export default function Parent() {
     }
   }
 
+  async function handleMoveSymbol(id: number, direction: -1 | 1) {
+    const ordered = [...symbols].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+    const currentIndex = ordered.findIndex(symbol => Number(symbol.id) === Number(id))
+    const nextIndex = currentIndex + direction
+    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= ordered.length) return
+
+    const [moved] = ordered.splice(currentIndex, 1)
+    ordered.splice(nextIndex, 0, moved)
+    const updated = ordered.map((symbol, index) => ({ ...symbol, order: index + 1 }))
+    setSymbols(updated)
+    localStorage.setItem(HOME_SCHOOL_KEY, JSON.stringify(updated))
+
+    if (isOnline()) {
+      const results = await Promise.all(updated.map(symbol =>
+        supabase.from('homeschool').update({ order: symbol.order }).eq('id', symbol.id)
+      ))
+      const failed = results.some(result => result.error)
+      if (failed) setError('The new order is shown here, but could not be fully saved online. Please try again.')
+    } else {
+      updated.forEach(symbol => {
+        addToOfflineQueue({
+          type: 'update',
+          id: Number(symbol.id),
+          data: { order: symbol.order },
+        })
+      })
+    }
+  }
+
   async function handleRemoveSymbol(id: number) {
     const updated = symbols.filter(f => Number(f.id) !== Number(id))
     setSymbols(updated)
@@ -613,6 +642,24 @@ export default function Parent() {
               <div className="text-center text-xs font-medium mb-1">{sym.label}</div>
               <div className="flex gap-1 mb-1 text-xs">
                 <span>{sym.home ? 'Home' : ''}{sym.home && sym.school ? ',' : ''}{sym.school ? 'School' : ''}</span>
+              </div>
+              <div className="flex gap-2 mb-2">
+                <button
+                  type="button"
+                  onClick={() => handleMoveSymbol(Number(sym.id), -1)}
+                  disabled={symbols.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0))[0]?.id === sym.id}
+                  className="px-2 py-1 border rounded text-xs disabled:opacity-40"
+                  aria-label={`Move ${sym.label} earlier`}
+                  title="Move earlier"
+                >↑</button>
+                <button
+                  type="button"
+                  onClick={() => handleMoveSymbol(Number(sym.id), 1)}
+                  disabled={symbols.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).at(-1)?.id === sym.id}
+                  className="px-2 py-1 border rounded text-xs disabled:opacity-40"
+                  aria-label={`Move ${sym.label} later`}
+                  title="Move later"
+                >↓</button>
               </div>
               <button
                 onClick={() => handleRemoveSymbol(Number(sym.id))}
