@@ -273,7 +273,7 @@ export const aacSymbols: AacSymbol[] = [
     category: 'places'
   },
  {
-    id: 'car',
+    id: 'go-in-car',
     text: 'Go in the car',
     imagePath: '/aac-images/car.jpg',
     category: 'activities'

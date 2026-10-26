@@ -8,6 +8,7 @@ const HOME_SCHOOL_KEY = 'aac_homeschool'
 const OFFLINE_QUEUE_KEY = 'aac_homeschool_queue'
 const PIN_KEY = 'aac_parent_pin'
 const TAB_PREFS_KEY = 'aac_tab_prefs'
+const HIDDEN_AAC_KEY = 'aac_hidden_symbols'
 
 type HomeSchoolSymbol = {
   id: string | number
@@ -105,6 +106,7 @@ export default function Parent() {
   const [error, setError] = useState('')
   const [tabPrefs, setTabPrefs] = useState<TabPrefs>({ all_tab: true, home: true, school: true })
   const [loadingPrefs, setLoadingPrefs] = useState(true)
+  const [hiddenAacIds, setHiddenAacIds] = useState<string[]>([])
 
   // PIN check on mount
   useEffect(() => {
@@ -153,6 +155,30 @@ export default function Parent() {
     setPinConfirm('')
     setPinError('')
     setShowPinPrompt(true)
+  }
+
+  // Hidden catalogue items are kept locally so they can be restored without deleting image assets.
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(HIDDEN_AAC_KEY) || '[]')
+      setHiddenAacIds(Array.isArray(stored) ? stored : [])
+    } catch {
+      setHiddenAacIds([])
+    }
+  }, [])
+
+  function handleHideAacSymbol(sym: AacSymbol) {
+    const message = `Hide "${sym.text}" from the Parent catalogue on this device? You can restore it later.`
+    if (!window.confirm(message)) return
+    const updated = Array.from(new Set([...hiddenAacIds, sym.id]))
+    setHiddenAacIds(updated)
+    localStorage.setItem(HIDDEN_AAC_KEY, JSON.stringify(updated))
+  }
+
+  function handleRestoreAacSymbol(id: string) {
+    const updated = hiddenAacIds.filter(hiddenId => hiddenId !== id)
+    setHiddenAacIds(updated)
+    localStorage.setItem(HIDDEN_AAC_KEY, JSON.stringify(updated))
   }
 
   // Fetch tab prefs from localStorage only (no Supabase)
@@ -337,7 +363,39 @@ export default function Parent() {
     }
   }
 
+  async function handleMoveSymbol(id: number, direction: -1 | 1) {
+    const ordered = [...symbols].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+    const currentIndex = ordered.findIndex(symbol => Number(symbol.id) === Number(id))
+    const nextIndex = currentIndex + direction
+    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= ordered.length) return
+
+    const [moved] = ordered.splice(currentIndex, 1)
+    ordered.splice(nextIndex, 0, moved)
+    const updated = ordered.map((symbol, index) => ({ ...symbol, order: index + 1 }))
+    setSymbols(updated)
+    localStorage.setItem(HOME_SCHOOL_KEY, JSON.stringify(updated))
+
+    if (isOnline()) {
+      const results = await Promise.all(updated.map(symbol =>
+        supabase.from('homeschool').update({ order: symbol.order }).eq('id', symbol.id)
+      ))
+      const failed = results.some(result => result.error)
+      if (failed) setError('The new order is shown here, but could not be fully saved online. Please try again.')
+    } else {
+      updated.forEach(symbol => {
+        addToOfflineQueue({
+          type: 'update',
+          id: Number(symbol.id),
+          data: { order: symbol.order },
+        })
+      })
+    }
+  }
+
   async function handleRemoveSymbol(id: number) {
+    const symbolToRemove = symbols.find(f => Number(f.id) === Number(id))
+    if (!symbolToRemove) return
+    if (!window.confirm(`Remove "${symbolToRemove.label}" from the active board? This removes its Home/School assignment, but does not delete its image file.`)) return
     const updated = symbols.filter(f => Number(f.id) !== Number(id))
     setSymbols(updated)
     if (isOnline()) {
@@ -519,7 +577,7 @@ export default function Parent() {
         {error && <div className="text-red-600 mt-2">{error}</div>}
       </div>
       <div className="mb-4 flex gap-2 flex-wrap">
-        {aacSymbols.map(sym => {
+        {aacSymbols.filter(sym => !hiddenAacIds.includes(sym.id)).map(sym => {
           const exist = symbols.find(s => s.label === sym.text && s.type === 'aac')
           return (
             <div key={sym.text} className="border rounded px-2 py-1 flex items-center gap-3 bg-gray-50 mb-2">
@@ -549,15 +607,38 @@ export default function Parent() {
                 <button
                   onClick={() => handleRemoveSymbol(Number(exist.id))}
                   className="ml-2 px-1 py-0 bg-red-400 text-white rounded text-xs"
-                  title="Remove from Home/School"
+                  title="Remove from the active board"
                 >
-                  ✕
+                  Remove from board
                 </button>
               )}
+              <button
+                type="button"
+                onClick={() => handleHideAacSymbol(sym)}
+                className="ml-1 px-1 py-0 border rounded text-xs"
+                title="Hide this item from the Parent catalogue on this device"
+              >
+                Hide
+              </button>
             </div>
           )
         })}
       </div>
+      {hiddenAacIds.length > 0 && (
+        <div className="mb-6 border rounded p-3 bg-yellow-50">
+          <h3 className="font-bold mb-2">Hidden catalogue items</h3>
+          <p className="text-xs text-gray-600 mb-3">These items are hidden only on this device. Restore any item to show it in the catalogue again.</p>
+          <div className="flex flex-wrap gap-2">
+            {aacSymbols.filter(sym => hiddenAacIds.includes(sym.id)).map(sym => (
+              <div key={sym.id} className="border rounded px-2 py-1 flex items-center gap-2 bg-white">
+                <img src={sym.imagePath} alt="" className="w-8 h-8 object-cover rounded" />
+                <span className="text-xs">{sym.text}</span>
+                <button type="button" onClick={() => handleRestoreAacSymbol(sym.id)} className="px-2 py-1 border rounded text-xs">Restore</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="mb-4 flex gap-2 flex-wrap">
         {symbols
           .filter(s => s.type === 'upload')
@@ -587,10 +668,10 @@ export default function Parent() {
               </label>
               <button
                 onClick={() => handleRemoveSymbol(Number(sym.id))}
-                className="ml-2 px-1 py-0 bg-red-400 text-white rounded text-xs"
-                title="Remove upload"
+                className="ml-2 px-2 py-1 bg-red-400 text-white rounded text-xs"
+                title="Remove upload from the active board"
               >
-                ✕
+                Remove from board
               </button>
             </div>
           ))}
@@ -614,11 +695,29 @@ export default function Parent() {
               <div className="flex gap-1 mb-1 text-xs">
                 <span>{sym.home ? 'Home' : ''}{sym.home && sym.school ? ',' : ''}{sym.school ? 'School' : ''}</span>
               </div>
+              <div className="flex gap-2 mb-2">
+                <button
+                  type="button"
+                  onClick={() => handleMoveSymbol(Number(sym.id), -1)}
+                  disabled={symbols.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0))[0]?.id === sym.id}
+                  className="px-2 py-1 border rounded text-xs disabled:opacity-40"
+                  aria-label={`Move ${sym.label} earlier`}
+                  title="Move earlier"
+                >↑</button>
+                <button
+                  type="button"
+                  onClick={() => handleMoveSymbol(Number(sym.id), 1)}
+                  disabled={symbols.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0))[symbols.length - 1]?.id === sym.id}
+                  className="px-2 py-1 border rounded text-xs disabled:opacity-40"
+                  aria-label={`Move ${sym.label} later`}
+                  title="Move later"
+                >↓</button>
+              </div>
               <button
                 onClick={() => handleRemoveSymbol(Number(sym.id))}
                 className="px-2 py-1 bg-red-500 text-white rounded text-xs"
               >
-                Remove
+                Remove from board
               </button>
             </div>
           ))}

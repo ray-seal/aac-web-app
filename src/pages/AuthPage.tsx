@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 
 export default function AuthPage() {
@@ -6,23 +7,46 @@ export default function AuthPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [view, setView] = useState<"sign-in" | "sign-up">("sign-in");
+  const [submitting, setSubmitting] = useState(false);
+  const navigate = useNavigate();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    if (view === "sign-in") {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) setError(error.message);
-    } else {
-      const { error } = await supabase.auth.signUp({ email, password });
-      if (error) setError(error.message);
+    setSubmitting(true);
+    try {
+      if (view === "sign-in") {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) {
+          setError(error.message);
+          return;
+        }
+        // Send the user straight to the parent area after a successful login.
+        navigate("/parent", { replace: true });
+      } else {
+        const { data, error } = await supabase.auth.signUp({ email, password });
+        if (error) {
+          setError(error.message);
+          return;
+        }
+        if (data.session) {
+          navigate("/parent", { replace: true });
+        } else {
+          setError("Account created. Please check your email to confirm your account, then sign in.");
+          setView("sign-in");
+        }
+      }
+    } catch {
+      setError("Unable to connect right now. Please check your connection and try again.");
+    } finally {
+      setSubmitting(false);
     }
   }
 
   return (
     <div className="flex flex-col items-center mt-20">
       <form onSubmit={handleSubmit} className="w-full max-w-xs bg-white p-6 rounded shadow">
-        <h2 className="mb-4 text-xl font-bold">{view === "sign-in" ? "Sign In" : "Sign Up"}</h2>
+        <h2 className="mb-4 text-xl font-bold">{submitting ? "Please wait..." : view === "sign-in" ? "Sign In" : "Sign Up"}</h2>
         <input
           type="email"
           className="border rounded p-2 w-full mb-2"
@@ -41,7 +65,7 @@ export default function AuthPage() {
           autoComplete="current-password"
           required
         />
-        <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded w-full">
+        <button type="submit" disabled={submitting} className="bg-blue-600 text-white px-4 py-2 rounded w-full disabled:opacity-60">
           {view === "sign-in" ? "Sign In" : "Sign Up"}
         </button>
         <div className="mt-2 text-sm">
