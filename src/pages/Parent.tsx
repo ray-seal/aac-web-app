@@ -707,7 +707,7 @@ export default function Parent() {
                 <button
                   type="button"
                   onClick={() => handleMoveSymbol(Number(sym.id), 1)}
-                  disabled={symbols.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).at(-1)?.id === sym.id}
+                  disabled={symbols.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0))[symbols.length - 1]?.id === sym.id}
                   className="px-2 py-1 border rounded text-xs disabled:opacity-40"
                   aria-label={`Move ${sym.label} later`}
                   title="Move later"
