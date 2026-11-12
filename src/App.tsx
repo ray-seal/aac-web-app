@@ -18,9 +18,9 @@ function ParentOrAuth() {
 
     (async () => {
       try {
-        const { data, error } = await supabase.auth.getUser();
+        const { data, error } = await supabase.auth.getSession();
         if (error) setAuthError(error.message);
-        if (mounted) setUser(data.user ?? null);
+        if (mounted) setUser(data.session?.user ?? null);
       } catch (e) {
         setAuthError(String(e));
         if (mounted) setUser(null);
@@ -39,7 +39,7 @@ function ParentOrAuth() {
   }, []);
 
   useEffect(() => {
-    // If there is an auth error or not authenticated, redirect to /auth
+    // Use the locally persisted session first. A missing connection is not a sign-out.
     if (authError || user === null) {
       navigate("/auth", { replace: true });
     }
