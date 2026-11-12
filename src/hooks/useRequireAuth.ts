@@ -14,13 +14,17 @@ export function useRequireAuth() {
 
   useEffect(() => {
     let active = true;
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getSession().then(({ data }) => {
       if (!active) return;
-      if (!data.user) {
+      if (!data.session?.user) {
         navigate("/auth", { replace: true });
       } else {
-        setUser(data.user);
+        setUser(data.session.user);
       }
+      setLoading(false);
+    }).catch(() => {
+      if (!active) return;
+      navigate("/auth", { replace: true });
       setLoading(false);
     });
     return () => { active = false; };

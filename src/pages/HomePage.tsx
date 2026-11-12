@@ -19,6 +19,7 @@ type HomeSchoolSymbol = {
   order: number
   home?: boolean
   school?: boolean
+  fileData?: string
 }
 
 type TabPrefs = { all_tab: boolean; home: boolean; school: boolean }
@@ -35,40 +36,98 @@ function guestSymbolsFromAac(): HomeSchoolSymbol[] {
   }))
 }
 
-async function cacheUserImages(symbols: HomeSchoolSymbol[], signedUrls: { [id: string]: string }) {
-  const cache: { [id: string]: string } = JSON.parse(localStorage.getItem('user_image_cache') || '{}');
-  let updated = false;
-  for (const sym of symbols) {
-    if (sym.type === 'upload' && sym.image_url) {
-      const imgUrl = signedUrls[String(sym.id)] || sym.image_url;
-      if (!cache[sym.id]) {
-        try {
-          const response = await fetch(imgUrl);
-          const blob = await response.blob();
-          const reader = new FileReader();
-          const dataUrl = await new Promise<string>((resolve, reject) => {
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
-          });
-          cache[sym.id] = dataUrl;
-          updated = true;
-        } catch (err) {
-          // Ignore
-        }
+const IMAGE_DB_NAME = 'speakly-offline-images'
+const IMAGE_STORE_NAME = 'images'
+
+type CachedImage = { id: string; dataUrl: string }
+
+function openImageDatabase(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    if (!('indexedDB' in window)) {
+      reject(new Error('IndexedDB is unavailable'))
+      return
+    }
+    const request = window.indexedDB.open(IMAGE_DB_NAME, 1)
+    request.onupgradeneeded = () => {
+      const db = request.result
+      if (!db.objectStoreNames.contains(IMAGE_STORE_NAME)) {
+        db.createObjectStore(IMAGE_STORE_NAME, { keyPath: 'id' })
       }
     }
-  }
-  if (updated) {
-    localStorage.setItem('user_image_cache', JSON.stringify(cache));
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => reject(request.error)
+  })
+}
+
+async function loadOfflineImages(): Promise<{ [id: string]: string }> {
+  try {
+    const db = await openImageDatabase()
+    const records = await new Promise<CachedImage[]>((resolve, reject) => {
+      const request = db.transaction(IMAGE_STORE_NAME, 'readonly').objectStore(IMAGE_STORE_NAME).getAll()
+      request.onsuccess = () => resolve(request.result as CachedImage[])
+      request.onerror = () => reject(request.error)
+    })
+    db.close()
+    const result: { [id: string]: string } = {}
+    records.forEach(record => { result[record.id] = record.dataUrl })
+    return result
+  } catch {
+    try {
+      return JSON.parse(localStorage.getItem('user_image_cache') || '{}')
+    } catch {
+      return {}
+    }
   }
 }
 
-function getSymbolImgSrc(sym: HomeSchoolSymbol, signedUrls: { [id: string]: string }) {
-  if (sym.type === 'aac') return sym.image_url;
-  const cache = JSON.parse(localStorage.getItem('user_image_cache') || '{}');
-  if (!window.navigator.onLine && cache[sym.id]) return cache[sym.id];
-  return signedUrls[String(sym.id)] || sym.image_url;
+async function cacheUserImages(
+  symbols: HomeSchoolSymbol[],
+  signedUrls: { [id: string]: string },
+  existing: { [id: string]: string }
+): Promise<{ [id: string]: string }> {
+  const cache = { ...existing }
+  for (const sym of symbols) {
+    if (sym.type !== 'upload' || !sym.image_url || cache[String(sym.id)]) continue
+    const imgUrl = signedUrls[String(sym.id)] || sym.image_url
+    if (!imgUrl) continue
+    try {
+      const response = await fetch(imgUrl)
+      if (!response.ok) continue
+      const blob = await response.blob()
+      if (!blob.type.startsWith('image/')) continue
+      const reader = new FileReader()
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        reader.onloadend = () => resolve(reader.result as string)
+        reader.onerror = reject
+        reader.readAsDataURL(blob)
+      })
+      const db = await openImageDatabase()
+      await new Promise<void>((resolve, reject) => {
+        const transaction = db.transaction(IMAGE_STORE_NAME, 'readwrite')
+        transaction.objectStore(IMAGE_STORE_NAME).put({ id: String(sym.id), dataUrl } satisfies CachedImage)
+        transaction.oncomplete = () => resolve()
+        transaction.onerror = () => reject(transaction.error)
+        transaction.onabort = () => reject(transaction.error)
+      })
+      db.close()
+      cache[String(sym.id)] = dataUrl
+    } catch {
+      // One unavailable image must not prevent the rest of the board from loading.
+    }
+  }
+  return cache
+}
+
+function getSymbolImgSrc(
+  sym: HomeSchoolSymbol,
+  signedUrls: { [id: string]: string },
+  cachedImages: { [id: string]: string }
+) {
+  if (sym.type === 'aac') return sym.image_url
+  if (sym.fileData) return sym.fileData
+  const cached = cachedImages[String(sym.id)]
+  if (cached) return cached
+  return window.navigator.onLine ? (signedUrls[String(sym.id)] || sym.image_url) : ''
 }
 
 export default function HomePage() {
@@ -76,6 +135,7 @@ export default function HomePage() {
   const [user, setUser] = useState<any>(null)
   const [symbols, setSymbols] = useState<HomeSchoolSymbol[]>([])
   const [signedUrls, setSignedUrls] = useState<{ [id: string]: string }>({})
+  const [cachedImages, setCachedImages] = useState<{ [id: string]: string }>({})
   const [tabPrefs, setTabPrefs] = useState<TabPrefs>({ all_tab: true, home: true, school: true })
   const [panel, setPanel] = useState<HomeSchoolSymbol[]>([])
   const [isGuest, setIsGuest] = useState(false)
@@ -83,9 +143,11 @@ export default function HomePage() {
 
   // Tab prefs effect: localStorage only, no Supabase, always set loadingPrefs false
   useEffect(() => {
+    let active = true
     setLoadingPrefs(true)
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) {
+    supabase.auth.getSession().then(({ data }) => {
+      if (!active) return
+      if (!data.session?.user) {
         setIsGuest(true)
         setUser(null)
         setSymbols(guestSymbolsFromAac())
@@ -94,7 +156,7 @@ export default function HomePage() {
         setLoadingPrefs(false)
         return
       }
-      setUser(data.user)
+      setUser(data.session.user)
       setIsGuest(false)
       const cached = localStorage.getItem(TAB_PREFS_KEY)
       if (cached) {
@@ -104,7 +166,16 @@ export default function HomePage() {
         localStorage.setItem(TAB_PREFS_KEY, JSON.stringify({ all_tab: true, home: true, school: true }))
       }
       setLoadingPrefs(false)
+    }).catch(() => {
+      if (!active) return
+      setIsGuest(true)
+      setUser(null)
+      setSymbols(guestSymbolsFromAac())
+      setTab('all')
+      setTabPrefs({ all_tab: true, home: false, school: false })
+      setLoadingPrefs(false)
     })
+    return () => { active = false }
   }, [])
 
   useEffect(() => {
@@ -120,38 +191,53 @@ export default function HomePage() {
 
   async function fetchSymbols() {
     if (isOnline()) {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('homeschool')
         .select('*')
         .eq('user_id', user.id)
         .order('order', { ascending: true })
-      setSymbols(data ?? [])
-      localStorage.setItem('aac_homeschool', JSON.stringify(data ?? []))
-    } else {
+      if (!error && data) {
+        setSymbols(data)
+        localStorage.setItem('aac_homeschool', JSON.stringify(data))
+        return
+      }
+    }
+    // Keep the last downloaded board available during a connection or Supabase outage.
+    try {
       const offline = localStorage.getItem('aac_homeschool')
       setSymbols(offline ? JSON.parse(offline) : [])
+    } catch {
+      setSymbols([])
     }
   }
 
   useEffect(() => {
+    let active = true
     async function loadSignedUrlsAndCache() {
-      const uploads = symbols.filter(f => f.type !== 'aac')
+      const cached = await loadOfflineImages()
+      if (!active) return
+      setCachedImages(cached)
+      if (!isOnline()) return
+
+      const uploads = symbols.filter(f => f.type === 'upload' && f.image_url)
       const urlMap: { [id: string]: string } = {}
       await Promise.all(
         uploads.map(async sym => {
           urlMap[String(sym.id)] = await getSignedImageUrl(sym.image_url)
         })
       )
+      if (!active) return
       setSignedUrls(urlMap)
-      if (isOnline()) {
-        await cacheUserImages(symbols, urlMap)
-      }
+      const updatedCache = await cacheUserImages(symbols, urlMap, cached)
+      if (active) setCachedImages(updatedCache)
     }
     if (!isGuest && symbols.length > 0) {
       loadSignedUrlsAndCache()
     } else {
       setSignedUrls({})
+      if (isGuest) setCachedImages({})
     }
+    return () => { active = false }
   }, [symbols, isGuest])
 
   const enabledTabs = isGuest
@@ -211,7 +297,7 @@ export default function HomePage() {
               disabled={isSelected}
             >
               <img
-                src={getSymbolImgSrc(sym, signedUrls)}
+                src={getSymbolImgSrc(sym, signedUrls, cachedImages)}
                 alt={sym.label}
                 className="w-16 h-16 object-cover rounded mb-2"
               />
@@ -239,7 +325,7 @@ export default function HomePage() {
                 onClick={() => handlePanelRemove(idx)}
               >×</button>
               <img
-                src={getSymbolImgSrc(sym, signedUrls)}
+                src={getSymbolImgSrc(sym, signedUrls, cachedImages)}
                 alt={sym.label}
                 className="w-10 h-10 object-cover rounded"
               />
