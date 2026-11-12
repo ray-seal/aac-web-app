@@ -47,10 +47,6 @@ function getOfflineQueue(): OfflineAction[] {
   }
 }
 
-function clearOfflineQueue() {
-  localStorage.removeItem(OFFLINE_QUEUE_KEY)
-}
-
 const IMAGE_DB_NAME = 'speakly-offline-images'
 const IMAGE_STORE_NAME = 'images'
 
@@ -144,6 +140,7 @@ function getSymbolImgSrc(
   cachedImages: { [id: string]: string }
 ) {
   if (sym.type === 'aac') return sym.image_url
+  if (sym.fileData) return sym.fileData
   const cached = cachedImages[String(sym.id)]
   if (cached) return cached
   return window.navigator.onLine ? (signedUrls[String(sym.id)] || sym.image_url) : ''
@@ -269,16 +266,23 @@ export default function Parent() {
 
   async function fetchSymbols() {
     if (isOnline()) {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('homeschool')
         .select('*')
         .eq('user_id', user.id)
         .order('order', { ascending: true })
-      setSymbols(data ?? [])
-      localStorage.setItem(HOME_SCHOOL_KEY, JSON.stringify(data ?? []))
-    } else {
+      if (!error && data) {
+        setSymbols(data)
+        localStorage.setItem(HOME_SCHOOL_KEY, JSON.stringify(data))
+        return
+      }
+    }
+    // A flaky connection or Supabase outage should not replace a good local board with an empty one.
+    try {
       const offline = localStorage.getItem(HOME_SCHOOL_KEY)
       setSymbols(offline ? JSON.parse(offline) : [])
+    } catch {
+      setSymbols([])
     }
   }
 
