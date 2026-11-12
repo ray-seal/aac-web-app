@@ -535,8 +535,20 @@ export default function Parent() {
             if (error) throw error
           }
         } catch {
-          remaining.push(action)
-          if (action.type === 'add') failedTemporaryIds.add(String(action.data.id))
+          if (action.type === 'add') {
+            remaining.push(action)
+            failedTemporaryIds.add(String(action.data.id))
+          } else if (action.type === 'update') {
+            remaining.push({
+              ...action,
+              id: serverIds.get(String(action.id)) ?? action.id,
+            })
+          } else if (action.type === 'remove') {
+            remaining.push({
+              ...action,
+              id: serverIds.get(String(action.id)) ?? action.id,
+            })
+          }
         }
       }
 
